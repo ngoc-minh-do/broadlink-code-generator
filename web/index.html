@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IR Learner & SmartIR Builder</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --text: #e0e0e0;
+    --text2: #a0a0c0;
+    --accent: #e94560;
+    --accent2: #533483;
+    --green: #00c853;
+    --yellow: #ffd600;
+    --mark: #ff6b6b;
+    --space: #4ecdc4;
+    --radius: 8px;
+    --font: 'Segoe UI', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 1.3rem; white-space: nowrap; }
+  header h1 span { color: var(--accent); }
+  nav { display: flex; gap: 4px; }
+  nav button {
+    background: transparent;
+    color: var(--text2);
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+  nav button:hover { background: var(--surface2); color: var(--text); }
+  nav button.active { background: var(--accent); color: white; }
+
+  main { flex: 1; padding: 20px; max-width: 1200px; margin: 0 auto; width: 100%; }
+  .tab { display: none; }
+  .tab.active { display: block; animation: fadeIn 0.25s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .card h3 { margin-bottom: 12px; color: var(--accent); font-size: 1rem; }
+
+  textarea, input, select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    resize: vertical;
+  }
+  textarea:focus, input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { min-height: 100px; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { filter: brightness(1.2); }
+  .btn-secondary { background: var(--surface2); color: var(--text); }
+  .btn-secondary:hover { filter: brightness(1.3); }
+  .btn-success { background: var(--green); color: #000; }
+  .btn-success:hover { filter: brightness(1.2); }
+
+  canvas {
+    width: 100%;
+    border-radius: var(--radius);
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  th, td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--surface2);
+  }
+  th { color: var(--text2); font-weight: 600; }
+  td.mark { color: var(--mark); }
+  td.space { color: var(--space); }
+
+  .binary-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .binary-bar .bit { padding: 2px 6px; border-radius: 3px; background: var(--surface2); }
+  .binary-bar .bit.one { background: var(--accent); color: white; }
+  .binary-bar .bit.zero { background: var(--surface2); color: var(--text2); }
+  .binary-bar .sep { margin: 0 6px; color: var(--text2); }
+
+  .json-output {
+    position: relative;
+  }
+  .json-output pre {
+    background: var(--bg);
+    padding: 16px;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    border: 1px solid var(--surface2);
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    background: var(--surface2);
+    border: none;
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: var(--accent); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    header { padding: 10px 16px; }
+    header h1 { font-size: 1.1rem; }
+  }
+
+  .stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    background: var(--surface2);
+  }
+
+  .command-entry {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 8px;
+  }
+  .command-entry.wide { grid-template-columns: 1fr 2fr auto; }
+
+  .label { display: block; font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    background: var(--surface2);
+    color: var(--text2);
+  }
+  .tag.mark { background: rgba(255,107,107,0.2); color: var(--mark); }
+  .tag.space { background: rgba(78,205,196,0.2); color: var(--space); }
+
+  .progress {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+  }
+
+  .info-box {
+    background: var(--surface2);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+    color: var(--text2);
+    margin-bottom: 12px;
+  }
+
+  .byte-row { margin-bottom: 16px; border-bottom: 1px solid var(--surface2); padding-bottom: 12px; }
+  .byte-row .label { font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+  .byte-row .hex { font-family: var(--mono); font-size: 0.82rem; margin-bottom: 4px; }
+  .byte-row .hex span { padding: 2px 6px; margin: 0 2px; border-radius: 3px; }
+  .hex-hdr { background: rgba(233,69,96,0.25); color: var(--accent); }
+  .hex-pld { background: rgba(255,214,0,0.15); color: var(--yellow); }
+  .hex-ftr { background: rgba(0,200,83,0.15); color: var(--green); }
+  .byte-row .flags { font-size: 0.75rem; color: var(--text2); }
+  .byte-row .flags .ok { color: var(--green); }
+  .byte-row .flags .warn { color: var(--yellow); }
+  .byte-row .struct { font-family: var(--mono); font-size: 0.75rem; color: var(--text2); margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>IR Learner & <span>SmartIR</span> Builder</h1>
+  <nav id="nav-tabs">
+    <button data-tab="input" class="active">Input</button>
+    <button data-tab="visualize">Visualize</button>
+    <button data-tab="analyze">Analyze</button>
+    <button data-tab="bytes">Bytes</button>
+    <button data-tab="smartir">SmartIR JSON</button>
+    <button data-tab="help">Help</button>
+  </nav>
+</header>
+
+<main>
+  <!-- INPUT TAB -->
+  <div id="tab-input" class="tab active">
+    <div class="card">
+      <h3>Raw IR Timing Data</h3>
+      <p style="color:var(--text2);font-size:0.8rem;margin-bottom:8px;">
+        Paste comma-separated microsecond values (from captures/*.txt or IRremoteESP8266 rawData)
+      </p>
+      <textarea id="raw-input" placeholder="e.g. 4294, 4264, 518, 1584, 518, 1554, 549, 518, ..."></textarea>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="loadCapture('cool_25_auto')">Load "Cool 25°C Auto"</button>
+        <button class="btn-primary" onclick="loadCapture('heat_25_auto')">Load "Heat 25°C Auto"</button>
+        <button class="btn-secondary" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUALIZE TAB -->
+  <div id="tab-visualize" class="tab">
+    <div class="card">
+      <h3>Signal Visualization</h3>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="tag mark"> Mark</span>
+        <span class="tag space"> Space</span>
+        <select id="zoom-level" onchange="drawVisualization()" style="width:auto;">
+          <option value="1">Full view</option>
+          <option value="2">2x zoom</option>
+          <option value="4">4x zoom</option>
+          <option value="8">8x zoom</option>
+          <option value="16">16x zoom</option>
+        </select>
+        <span id="viz-range" style="font-size:0.8rem;color:var(--text2);"></span>
+      </div>
+      <canvas id="ir-canvas" width="1100" height="300"></canvas>
+    </div>
+  </div>
+
+  <!-- ANALYZE TAB -->
+  <div id="tab-analyze" class="tab">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Timing Candidates</h3>
+        <div id="candidates-output">
+          <p style="color:var(--text2);">No data analyzed yet. Go to Input tab and load data first.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Binary Decoding</h3>
+        <div id="binary-output">
+          <p style="color:var(--text2);">Click "Analyze" to decode.</p>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:8px;">
+      <h3>Timeline Detail</h3>
+      <div style="max-height:400px;overflow-y:auto;">
+        <table id="timeline-table">
+          <thead><tr><th>#</th><th>Type</th><th>Duration (μs)</th><th>Interpretation</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- BYTES TAB -->
+  <div id="tab-bytes" class="tab">
+    <div class="card">
+      <h3>Decode Base64 to Protocol Bytes</h3>
+      <p style="color:var(--text2);font-size:0.8rem;margin-bottom:8px;">
+        Paste one or more base64 strings (from <code>main.py</code> output), one per line.
+        Optionally prefix with a label: <code>25 cool auto</code> on the line before its base64.
+      </p>
+      <textarea id="bytes-input" rows="6" placeholder="JgAuAYuNETQRNBERERESEBIRETQRERIQEhESMxE0ETMSMxIR..."></textarea>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="decodeBytes()">Decode</button>
+        <button class="btn-secondary" onclick="loadFewForBytes()">Load captures/Toshiba_RAS-K281X.txt</button>
+      </div>
+    </div>
+    <div id="bytes-output" class="card">
+      <p id="bytes-placeholder" style="color:var(--text2);">Click "Decode" to analyze protocol bytes.</p>
+      <div id="bytes-legend" style="display:none;margin-bottom:16px;">
+        <h4 style="margin-bottom:6px;">Protocol Byte Map <span style="font-weight:normal;font-size:0.75rem;color:var(--text2);">(18 bytes = 144 bits)</span></h4>
+        <table style="font-size:0.78rem;">
+          <tr style="background:var(--surface2);">
+            <th>Pos</th><th>Name</th><th>Purpose</th>
+          </tr>
+          <tr><td>0–1</td><td>Header</td><td>Fixed device ID (<span class="hex-hdr" style="padding:1px 4px;">C2 3D</span>)</td></tr>
+          <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, 1→FF, 2→9F, 3→5F, 4→3F, 5→3F. Dry mode auto→1F</td></tr>
+          <tr><td>3</td><td>Check</td><td>Complement of byte 2: <b>FF − B2</b> (error detection)</td></tr>
+          <tr><td>4</td><td>Mode + Temp</td><td>
+            <b>Upper nibble (bits 7–4)</b> = temperature (16–30°C). Encoding varies by mode:<br>
+            <span style="font-size:0.7rem;">
+            <b>cool</b>: [4]=b1, [5]=b2, [6]=b3&~b2, [7]=1 if t≥25<br>
+            <b>heat</b>: [4]=b1, [5]=b2&b3, [6]=b3⊕b2, [7]=1 if t≥25<br>
+            <b>dry</b>:  [4]=b1, [5]=b2&~b1, [6]=b3, [7]=1 if t≥25<br>
+            <b>fan_only</b>: always E4h (temperature not applicable)<br>
+            Some adjacent temps share the same code.<br>
+            <b>Lower nibble (bits 3–0)</b> = mode: 0=cool, 4=fan_only/dry, C=heat
+            </span>
+          </td></tr>
+          <tr><td>5</td><td>Check</td><td>Complement of byte 4: <b>FF − B4</b> (error detection)</td></tr>
+          <tr><td>6–11</td><td>Repeat</td><td>Copy of bytes 0–5 (for reliability)</td></tr>
+          <tr><td>12</td><td>Footer marker</td><td>Fixed <b>D5</b></td></tr>
+          <tr style="background:rgba(0,200,83,0.08);"><td>13</td><td>Fan %</td><td>Fan speed as percentage (1, 40, 60, 80, 100, 102=auto)</td></tr>
+          <tr><td>14–16</td><td>Reserved</td><td>Usually 00; set to 10 at 16°C, 02 at fan speed 5</td></tr>
+          <tr style="background:rgba(0,200,83,0.08);"><td>17</td><td>Checksum</td><td><b>Sum(B12..B16) % 256</b></td></tr>
+        </table>
+        <p style="margin-top:6px;font-size:0.7rem;color:var(--text2);">
+          <span class="hex-hdr" style="padding:1px 4px;">Header</span>
+          <span class="hex-pld" style="padding:1px 4px;margin-left:8px;">Payload</span>
+          <span class="hex-ftr" style="padding:1px 4px;margin-left:8px;">Footer</span>
+          &nbsp;&nbsp;Color key for byte display below
+        </p>
+      </div>
+      <div id="bytes-results"></div>
+    </div>
+  </div>
+
+  <!-- SMARTIR TAB -->
+  <div id="tab-smartir" class="tab">
+    <div class="card">
+      <h3>SmartIR JSON Builder</h3>
+      <p style="color:var(--text2);font-size:0.8rem;margin-bottom:12px;">
+        Build a SmartIR-compatible JSON for Home Assistant. Commands use Base64 encoding.
+      </p>
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div>
+          <label class="label">Manufacturer</label>
+          <input id="sir-manufacturer" placeholder="e.g. Daikin">
+        </div>
+        <div>
+          <label class="label">Supported Models</label>
+          <input id="sir-models" placeholder="e.g. FTXM25, FTXM35 (comma-separated)">
+        </div>
+        <div>
+          <label class="label">Supported Controller</label>
+          <select id="sir-controller">
+            <option value="Broadlink">Broadlink</option>
+            <option value="Xiaomi">Xiaomi</option>
+            <option value="MQTT">MQTT</option>
+            <option value="LOOKin">LOOKin</option>
+            <option value="ESPHome">ESPHome</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Commands Encoding</label>
+          <select id="sir-encoding" onchange="toggleEncodingMode()">
+            <option value="Base64">Base64 (default)</option>
+            <option value="Raw">Raw (integer array)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Base64 Command Generator</h3>
+      <p style="color:var(--text2);font-size:0.8rem;margin-bottom:8px;">
+        Paste the base64 string from <code>main.py</code> output for each command.
+      </p>
+      <div id="command-entries">
+        <div class="command-entry">
+          <div><label class="label">Command Name</label><input id="cmd-name-0" placeholder="off"></div>
+          <div><label class="label">Base64 / Raw</label><input id="cmd-value-0" placeholder="base64 string..."></div>
+          <button class="btn-secondary" onclick="addCommandEntry()" style="margin-bottom:0;">+</button>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="addCommandEntry()" style="margin-top:8px;">+ Add Command</button>
+    </div>
+
+    <div class="card">
+      <h3>Generated SmartIR JSON</h3>
+      <div class="json-output">
+        <button class="copy-btn" onclick="copyJSON()">Copy</button>
+        <pre id="json-preview">Click "Generate" to build the JSON</pre>
+      </div>
+      <div class="btn-row">
+        <button class="btn-success" onclick="generateSmartIR()">Generate JSON</button>
+        <button class="btn-secondary" onclick="downloadJSON()">Download .json</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HELP TAB -->
+  <div id="tab-help" class="tab">
+    <div class="card">
+      <h3>How to Use</h3>
+      <div class="info-box">
+        <strong>1. Capture IR signals</strong> — Use <code>uv run python main.py</code> with your Broadlink device. Press a button on your AC remote and copy the Base64 output.
+      </div>
+      <div class="info-box">
+        <strong>2. Analyze raw timings</strong> — Paste raw timing data (from <code>captures/*.txt</code>) into the Input tab. Click "Visualize" to see the waveform and "Analyze" to decode the protocol.
+      </div>
+      <div class="info-box">
+        <strong>3. Build SmartIR JSON</strong> — Switch to the SmartIR tab. Fill in manufacturer/model info. Paste each captured Base64 command and name it. Click "Generate" then "Download".
+      </div>
+      <div class="info-box">
+        <strong>SmartIR JSON files</strong> go in <code>custom_components/smartir/codes/&lt;type&gt;/</code> inside your Home Assistant config directory.
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+let timings = [];
+let markCandidates = [];
+let spaceCandidates = [];
+let decodedBits = '';
+let analysisResult = null;
+let commandCount = 1;
+
+// ── Tab Navigation ──────────────────────────────────────
+document.getElementById('nav-tabs').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const tabId = btn.dataset.tab;
+  document.querySelectorAll('#nav-tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  if (tabId === 'visualize' && timings.length > 0) drawVisualization();
+});
+
+// ── Data Loading ────────────────────────────────────────
+async function loadCapture(name) {
+  try {
+    const resp = await fetch('/captures/' + name + '.txt');
+    const text = await resp.text();
+    document.getElementById('raw-input').value = text.trim();
+    parseAll(text.trim());
+  } catch (e) {
+    alert('Failed to load ' + name + ': ' + e.message);
+  }
+}
+
+document.getElementById('raw-input').addEventListener('input', function() {
+  parseAll(this.value);
+});
+
+function clearAll() {
+  document.getElementById('raw-input').value = '';
+  timings = [];
+  markCandidates = [];
+  spaceCandidates = [];
+  decodedBits = '';
+  analysisResult = null;
+  clearCanvas();
+  document.getElementById('candidates-output').innerHTML = '<p style="color:var(--text2);">No data analyzed yet.</p>';
+  document.getElementById('binary-output').innerHTML = '<p style="color:var(--text2);">Click "Analyze" to decode.</p>';
+  document.getElementById('timeline-table').querySelector('tbody').innerHTML = '';
+}
+
+// ── Parsing & Analysis ──────────────────────────────────
+function parseAll(raw) {
+  if (!raw || !raw.trim()) return;
+  const nums = raw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  timings = nums;
+  analyze();
+  drawVisualization();
+}
+
+function analyze() {
+  if (timings.length < 4) return;
+  const margin = 150;
+  const marks = [], spaces = [];
+  timings.forEach((v, i) => { (i % 2 === 0 ? marks : spaces).push(v); });
+
+  markCandidates = reduceList(marks, margin);
+  spaceCandidates = reduceList(spaces, margin);
+
+  const bitMark = markCandidates[markCandidates.length - 1] || 0;
+  const hdrMark = markCandidates.length > 1 ? markCandidates[0] : 0;
+  const ldrMark = markCandidates.length > 2 ? markCandidates[0] : null;
+  const actualHdrMark = markCandidates.length > 2 ? markCandidates[1] : hdrMark;
+
+  const isSpaceEnc = spaces.length > marks.length;
+  let zeroSpace = null, oneSpace = null, hdrSpace = null, gaps = [];
+  if (isSpaceEnc && spaceCandidates.length >= 2) {
+    const sc = [...spaceCandidates];
+    zeroSpace = sc.pop();
+    oneSpace = sc.pop();
+    if (sc.length > 0) hdrSpace = sc.pop();
+    gaps = sc;
+  }
+
+  analysisResult = { bitMark, hdrMark: actualHdrMark, ldrMark, isSpaceEnc,
+    zeroSpace, oneSpace, hdrSpace, gaps, margin };
+
+  // Decode binary
+  decodedBits = '';
+  for (let i = 0; i < timings.length; i++) {
+    const v = timings[i];
+    if (i % 2 === 0) continue; // spaces only
+    if (isSpaceEnc && zeroSpace !== null && oneSpace !== null) {
+      if (withinMargin(v, zeroSpace, margin)) decodedBits += '0';
+      else if (withinMargin(v, oneSpace, margin)) decodedBits += '1';
+    }
+  }
+
+  renderCandidates();
+  renderBinary();
+  renderTimeline();
+}
+
+function reduceList(items, margin) {
+  const result = [];
+  const sorted = [...new Set(items)].sort((a, b) => b - a);
+  for (const item of sorted) {
+    if (result.length === 0 || item < result[result.length - 1] - margin) {
+      result.push(item);
+    }
+  }
+  result.sort((a, b) => a - b);
+  return result;
+}
+
+function withinMargin(seen, expected, margin) {
+  if (expected === null || expected === undefined) return false;
+  return expected - margin < seen && seen <= expected + margin;
+}
+
+function avgList(items) {
+  if (!items || items.length === 0) return 0;
+  return Math.round(items.reduce((a, b) => a + b, 0) / items.length);
+}
+
+function renderCandidates() {
+  const r = analysisResult;
+  if (!r) return;
+  let html = '';
+  html += `<p><span class="stat">Marks: ${markCandidates.join(', ')}</span></p>`;
+  html += `<p style="margin-top:8px;"><span class="stat">Spaces: ${spaceCandidates.join(', ')}</span></p>`;
+  html += `<p style="margin-top:8px;">Encoding: <strong>${r.isSpaceEnc ? 'Space-encoded' : 'Mark-encoded'}</strong></p>`;
+  html += `<table style="margin-top:8px;">
+    <tr><td>Header Mark</td><td class="mark">${r.hdrMark} μs</td></tr>`;
+  if (r.ldrMark) html += `<tr><td>Leader Mark</td><td class="mark">${r.ldrMark} μs</td></tr>`;
+  if (r.hdrSpace) html += `<tr><td>Header Space</td><td class="space">${r.hdrSpace} μs</td></tr>`;
+  html += `<tr><td>Bit Mark</td><td class="mark">${r.bitMark} μs</td></tr>`;
+  if (r.zeroSpace) html += `<tr><td>Zero Space</td><td class="space">${r.zeroSpace} μs</td></tr>`;
+  if (r.oneSpace) html += `<tr><td>One Space</td><td class="space">${r.oneSpace} μs</td></tr>`;
+  if (r.gaps && r.gaps.length > 0) {
+    r.gaps.forEach((g, i) => {
+      html += `<tr><td>Gap ${i + 1}</td><td class="space">${g} μs</td></tr>`;
+    });
+  }
+  html += '</table>';
+  document.getElementById('candidates-output').innerHTML = html;
+}
+
+function renderBinary() {
+  if (!decodedBits) {
+    document.getElementById('binary-output').innerHTML = '<p style="color:var(--text2);">No bits decoded.</p>';
+    return;
+  }
+  let html = `<p><span class="stat">Bits: ${decodedBits.length}</span></p>`;
+  html += '<div class="binary-bar">';
+  for (let i = 0; i < decodedBits.length; i++) {
+    if (i > 0 && i % 8 === 0) html += '<span class="sep"> </span>';
+    html += `<span class="bit ${decodedBits[i] === '1' ? 'one' : 'zero'}">${decodedBits[i]}</span>`;
+  }
+  html += '</div>';
+
+  // Hex values
+  const bin = decodedBits;
+  const msbVal = BigInt('0b' + bin);
+  const lsbVal = BigInt('0b' + bin.split('').reverse().join(''));
+  const hexLen = Math.ceil(bin.length / 4);
+  html += `<p style="margin-top:8px;font-family:var(--mono);font-size:0.8rem;">
+    Hex (MSB): <strong>0x${msbVal.toString(16).toUpperCase().padStart(hexLen, '0')}</strong><br>
+    Hex (LSB): <strong>0x${lsbVal.toString(16).toUpperCase().padStart(hexLen, '0')}</strong>
+  </p>`;
+
+  document.getElementById('binary-output').innerHTML = html;
+}
+
+function renderTimeline() {
+  const r = analysisResult;
+  const tbody = document.getElementById('timeline-table').querySelector('tbody');
+  tbody.innerHTML = '';
+  if (!r) return;
+
+  let state = 'START';
+  timings.forEach((v, i) => {
+    const type = i % 2 === 0 ? 'mark' : 'space';
+    let interp = '';
+    if (r && type === 'mark') {
+      if (r.ldrMark && withinMargin(v, r.ldrMark, r.margin)) interp = 'Leader Mark';
+      else if (r.hdrMark && withinMargin(v, r.hdrMark, r.margin)) interp = 'Header Mark';
+      else if (r.bitMark && withinMargin(v, r.bitMark, r.margin)) interp = 'Bit Mark';
+      else interp = 'Unknown Mark';
+      state = interp;
+    } else if (r && type === 'space') {
+      if (r.hdrSpace && withinMargin(v, r.hdrSpace, r.margin)) interp = 'Header Space';
+      else if (r.zeroSpace && withinMargin(v, r.zeroSpace, r.margin)) interp = 'Zero Space (bit=0)';
+      else if (r.oneSpace && withinMargin(v, r.oneSpace, r.margin)) interp = 'One Space (bit=1)';
+      else if (r.gaps && r.gaps.some(g => withinMargin(v, g, r.margin))) interp = 'Gap';
+      else interp = 'Unknown Space';
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td><td class="${type}">${type}</td><td>${v}</td><td>${interp}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Visualization ───────────────────────────────────────
+function drawVisualization() {
+  const canvas = document.getElementById('ir-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = 300;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (timings.length === 0) {
+    ctx.fillStyle = '#666';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data. Load or paste raw timings in the Input tab.', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const zoom = parseInt(document.getElementById('zoom-level').value);
+  const totalTime = timings.reduce((a, b) => a + b, 0);
+  const maxSampleTime = totalTime / zoom;
+  const margin = 30;
+  const drawW = canvas.width - margin * 2;
+  const drawH = canvas.height - margin * 2;
+  const yMid = canvas.height / 2;
+  const amplitude = drawH * 0.35;
+
+  // Draw baseline
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(margin, yMid);
+  ctx.lineTo(canvas.width - margin, yMid);
+  ctx.stroke();
+
+  // Draw signal
+  let x = margin;
+  let cumTime = 0;
+  const startCum = maxSampleTime > totalTime ? 0 : Math.max(0, totalTime - maxSampleTime);
+
+  const scaleX = drawW / Math.min(totalTime, maxSampleTime);
+
+  ctx.beginPath();
+  let first = true;
+  cumTime = 0;
+
+  timings.forEach((v, i) => {
+    const isMark = i % 2 === 0;
+    const screenX = margin + cumTime * scaleX;
+
+    if (first) {
+      ctx.moveTo(screenX, yMid);
+      first = false;
+    }
+
+    if (isMark) {
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--mark').trim();
+      ctx.lineTo(screenX, yMid);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(screenX, yMid);
+      ctx.lineTo(screenX, yMid - amplitude);
+      const endX = margin + (cumTime + v) * scaleX;
+      ctx.lineTo(endX, yMid - amplitude);
+      ctx.lineTo(endX, yMid);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(endX, yMid);
+    } else {
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--space').trim();
+      ctx.lineTo(screenX, yMid);
+    }
+    cumTime += v;
+  });
+
+  // Final line to end
+  ctx.strokeStyle = '#555';
+  ctx.lineTo(margin + cumTime * scaleX, yMid);
+  ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${(timings.length)} pulses · ${(totalTime / 1000).toFixed(1)}ms total`, canvas.width / 2, canvas.height - 6);
+  ctx.fillText(`${(timings[0] || 0)}μs`, margin + timings[0] * scaleX / 2, yMid - amplitude - 6);
+  if (timings.length > 1) {
+    const mid = Math.floor(timings.length / 2);
+    let midCum = timings.slice(0, mid).reduce((a, b) => a + b, 0);
+    ctx.fillText(`${(midCum / 1000).toFixed(1)}ms`, margin + midCum * scaleX, yMid + 16);
+  }
+  document.getElementById('viz-range').textContent =
+    `Total: ${timings.length} pulses, ${(totalTime / 1000).toFixed(1)} ms`;
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById('ir-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+window.addEventListener('resize', () => { if (timings.length > 0) drawVisualization(); });
+
+// ── SmartIR Builder ─────────────────────────────────────
+
+function toggleEncodingMode() {
+  const encoding = document.getElementById('sir-encoding').value;
+  const inputs = document.querySelectorAll('[id^="cmd-value-"]');
+  inputs.forEach(inp => {
+    inp.placeholder = encoding === 'Base64' ? 'base64 string...' : 'e.g. 4294, 4264, 518, ...';
+  });
+}
+
+function addCommandEntry() {
+  const container = document.getElementById('command-entries');
+  const idx = commandCount;
+  const encoding = document.getElementById('sir-encoding').value;
+  const placeholder = encoding === 'Base64' ? 'base64 string...' : 'e.g. 4294, 4264, 518, ...';
+  const div = document.createElement('div');
+  div.className = 'command-entry' + (encoding === 'Raw' ? ' wide' : '');
+  div.id = 'cmd-row-' + idx;
+  div.innerHTML = `
+    <div><label class="label">Command Name</label><input id="cmd-name-${idx}" placeholder="e.g. cool_25"></div>
+    <div><label class="label">${encoding} Value</label><input id="cmd-value-${idx}" placeholder="${placeholder}"></div>
+    <button class="btn-secondary" onclick="removeCommandEntry(${idx})">✕</button>
+  `;
+  container.appendChild(div);
+  commandCount++;
+}
+
+function removeCommandEntry(idx) {
+  const el = document.getElementById('cmd-row-' + idx);
+  if (el) el.remove();
+}
+
+function generateSmartIR() {
+  const manufacturer = document.getElementById('sir-manufacturer').value.trim() || 'Unknown';
+  const modelsRaw = document.getElementById('sir-models').value.trim();
+  const supportedModels = modelsRaw ? modelsRaw.split(',').map(s => s.trim()) : ['Unknown'];
+  const controller = document.getElementById('sir-controller').value;
+  const encoding = document.getElementById('sir-encoding').value;
+
+  const commands = {};
+  for (let i = 0; i < commandCount; i++) {
+    const nameEl = document.getElementById('cmd-name-' + i);
+    const valueEl = document.getElementById('cmd-value-' + i);
+    if (!nameEl || !valueEl) continue;
+    const name = nameEl.value.trim();
+    let value = valueEl.value.trim();
+    if (!name || !value) continue;
+
+    if (encoding === 'Raw') {
+      value = value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    }
+
+    // Support nested commands like "cool/25" or "cool_25" -> nested
+    if (name.includes('_')) {
+      const parts = name.split('_');
+      const mode = parts[0];
+      const sub = parts.slice(1).join('_');
+      if (!commands[mode]) commands[mode] = {};
+      commands[mode][sub] = value;
+    } else {
+      commands[name] = value;
+    }
+  }
+
+  const json = {
+    manufacturer,
+    supportedModels,
+    supportedController: controller,
+    commandsEncoding: encoding,
+    minRepeat: 1,
+    commands
+  };
+
+  document.getElementById('json-preview').textContent = JSON.stringify(json, null, 2);
+  return json;
+}
+
+function copyJSON() {
+  const text = document.getElementById('json-preview').textContent;
+  if (!text || text === 'Click "Generate" to build the JSON') return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+function downloadJSON() {
+  const text = document.getElementById('json-preview').textContent;
+  if (!text || text === 'Click "Generate" to build the JSON') {
+    alert('Generate the JSON first.');
+    return;
+  }
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const mfr = (document.getElementById('sir-manufacturer').value || 'custom').toLowerCase();
+  a.href = url;
+  a.download = `${mfr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Bytes Tab ──────────────────────────────────────────
+
+async function loadFewForBytes() {
+  try {
+    const resp = await fetch('/captures/Toshiba_RAS-K281X.txt');
+    if (!resp.ok) throw new Error('not found');
+    const text = await resp.text();
+    document.getElementById('bytes-input').value = text.trim();
+  } catch (e) {
+    alert('Failed to load captures/Toshiba_RAS-K281X.txt');
+  }
+}
+
+async function decodeBytes() {
+  const raw = document.getElementById('bytes-input').value.trim();
+  if (!raw) return;
+
+  const out = document.getElementById('bytes-results');
+  document.getElementById('bytes-placeholder').style.display = 'none';
+  out.innerHTML = '<p style="color:var(--text2);">Decoding...</p>';
+
+  // Parse input: either single base64 per line, or label+base64 pairs
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+  const codes = [];
+  for (let i = 0; i < lines.length; i++) {
+    // Try to detect: what looks like base64 vs label
+    const line = lines[i];
+    if (line.length > 60 && /^[A-Za-z0-9+/=]+$/.test(line)) {
+      // This is a base64 string; look back for a label
+      const label = (i > 0 && lines[i - 1].length < 60 && !/^[A-Za-z0-9+/=]+$/.test(lines[i - 1]))
+        ? lines[i - 1] : `code ${codes.length + 1}`;
+      codes.push({ label, b64: line });
+    }
+  }
+
+  if (codes.length === 0) {
+    out.innerHTML = '<p style="color:var(--yellow);">No valid base64 strings found.</p>';
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/decode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes })
+    });
+    if (!resp.ok) {
+      out.innerHTML = `<p style="color:var(--yellow);">Server error: ${resp.status}</p>`;
+      return;
+    }
+    const result = await resp.json();
+    if (!result || result.error) {
+      out.innerHTML = `<p style="color:var(--yellow);">${result?.error || 'Empty response'}</p>`;
+      return;
+    }
+    if (!result.results || result.results.length === 0) {
+      out.innerHTML = '<p style="color:var(--yellow);">No results returned.</p>';
+      return;
+    }
+    renderByteResults(result.results);
+  } catch (e) {
+    out.innerHTML = `<p style="color:var(--yellow);">Failed: ${e.message || e}</p>`;
+  }
+}
+
+function renderByteResults(results) {
+  document.getElementById('bytes-legend').style.display = 'block';
+  document.getElementById('bytes-placeholder').style.display = 'none';
+  const out = document.getElementById('bytes-results');
+
+  if (!results || results.length === 0) {
+    out.innerHTML = '<p style="color:var(--text2);">No results.</p>';
+    return;
+  }
+
+  let html = `<h3>Decoded ${results.length} signal(s)</h3>`;
+  for (const r of results) {
+    if (r.error) {
+      html += `<div class="byte-row"><div class="label">${r.label}</div><div class="warn">Error: ${r.error}</div></div>`;
+      continue;
+    }
+    const bytes = r.bytes_hex;
+    const n = bytes.length;
+
+    // Color-code bytes: B0-B1 (header), B2-B5 (payload), B6-B11 (repeat), B12-B17 (footer)
+    let hexHtml = '';
+    for (let i = 0; i < n; i++) {
+      let cls = 'hex-pld';
+      if (i < 2) cls = 'hex-hdr';
+      else if (i >= 6 && i < 12) cls = 'hex-hdr';
+      else if (i >= 12) cls = 'hex-ftr';
+      hexHtml += `<span class="${cls}">${bytes[i]}</span>`;
+    }
+
+    // Human-readable structure annotation
+    let structHtml = '';
+    if (n >= 6) {
+      const p1 = bytes.slice(0, 6).join(' ');
+      structHtml += `<div class="struct">Payload (bytes 0–5):  [${p1}]</div>`;
+    }
+    if (n >= 12) {
+      const p2 = bytes.slice(6, 12).join(' ');
+      structHtml += `<div class="struct">Repeat  (bytes 6–11): [${p2}]</div>`;
+    }
+    if (n >= 18) {
+      const ft = bytes.slice(12, 18).join(' ');
+      structHtml += `<div class="struct">Footer  (bytes 12–17): [${ft}]</div>`;
+    }
+
+    // Human-readable flags
+    let flagsHtml = '';
+    if (r.complement_b2b3) flagsHtml += '<span class="ok"> Byte 2+3 complementary ✓</span>';
+    if (r.complement_b4b5) flagsHtml += '<span class="ok"> Byte 4+5 complementary ✓</span>';
+    if (r.checksum_ok !== undefined) {
+      flagsHtml += r.checksum_ok
+        ? '<span class="ok"> Checksum valid ✓</span>'
+        : '<span class="warn"> Checksum FAIL ✗</span>';
+    }
+    if (r.b13_value !== undefined) {
+      const fanLabels = {'1':'speed 1','40':'speed 2','60':'speed 3','80':'speed 4','100':'speed 5','102':'auto','101':'auto (dry)'};
+      const fanLabel = fanLabels[String(r.b13_value)] || r.b13_value;
+      flagsHtml += ` <span class="ok"> Fan: ${fanLabel}</span>`;
+    }
+
+    const offNote = r.is_off ? ' (OFF — no footer, 12 bytes only)' : '';
+
+    html += `<div class="byte-row">
+      <div class="label">${r.label}  <span style="font-weight:normal;font-size:0.78rem;color:var(--text2);">${r.nbits} bits · ${r.nbytes} bytes · ${r.pulse_count} pulses${offNote}</span></div>
+      <div class="hex">${hexHtml}</div>
+      <div class="flags">${flagsHtml}</div>
+      ${structHtml}
+    </div>`;
+  }
+  out.innerHTML = html;
+}
+
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const input = document.getElementById('raw-input').value;
+  if (input.trim()) parseAll(input.trim());
+});
+</script>
+</body>
+</html>
