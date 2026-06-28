@@ -294,41 +294,34 @@ def build_smartir(decoded, generate_all=False) -> dict:
 
     for mode in CLIMATE_MODES[1:]:  # skip "off"
         commands[mode] = {}
-        # Dry mode only supports auto fan speed
-        fans = ["auto"] if mode == "dry" else FAN_SPEEDS
-        for temp in TEMP_RANGE:
-            temp_key = str(temp)
-            for fan in fans:
+        fans = FAN_SPEEDS
+        for fan in fans:
+            commands[mode][fan] = {}
+            for temp in TEMP_RANGE:
+                temp_key = str(temp)
                 key = (mode, temp, fan)
                 if key in verified:
                     # Use the actual captured code
                     for label, d in decoded.items():
                         p = parse_label(label)
                         if (p.get("mode"), p.get("temp"), p.get("fan")) == key:
-                            if fan == "auto":
-                                commands[mode][temp_key] = d["b64"]
-                            else:
-                                fan_key = f"{temp_key}_fan{fan}"
-                                commands[mode][fan_key] = d["b64"]
+                            commands[mode][fan][temp_key] = d["b64"]
                             break
                 elif generate_all:
                     # Generate from formulas
                     code = generate_code(mode, temp, fan)
-                    if fan == "auto":
-                        if temp_key not in commands[mode]:
-                            commands[mode][temp_key] = code
-                        elif not isinstance(commands[mode].get(temp_key), str):
-                            commands[mode][temp_key] = code
-                    else:
-                        fan_key = f"{temp_key}_fan{fan}"
-                        commands[mode][fan_key] = code
+                    commands[mode][fan][temp_key] = code
 
     return {
-        "manufacturer": "",
-        "supportedModels": [""],
+        "manufacturer": "Toshiba",
+        "supportedModels": ["Toshiba AC"],
         "supportedController": "Broadlink",
         "commandsEncoding": "Base64",
-        "minRepeat": 1,
+        "minTemperature": 16.0,
+        "maxTemperature": 30.0,
+        "precision": 1.0,
+        "operationModes": ["heat", "cool", "dry", "fan_only"],
+        "fanModes": ["auto", "quiet", "low", "medium", "high", "powerful"],
         "commands": commands,
     }
 

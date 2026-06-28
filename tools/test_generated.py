@@ -112,7 +112,7 @@ def load_test_list(args):
 
     if args.all:
         for mode in CLIMATE_MODES[1:]:  # skip "off"
-            fans = ["auto"] if mode == "dry" else FAN_SPEEDS
+            fans = FAN_SPEEDS
             for temp in TEMP_RANGE:
                 for fan in fans:
                     # Skip fan-only non-auto temps (all same code anyway)
@@ -121,7 +121,7 @@ def load_test_list(args):
                     tests.append((mode, temp, fan))
     elif args.temps:
         for mode in (args.mode or ["cool", "heat", "fan_only", "dry"]):
-            fans = ["auto"] if mode == "dry" else (args.fan or FAN_SPEEDS)
+            fans = args.fan or FAN_SPEEDS
             for temp in args.temps:
                 for fan in fans:
                     tests.append((mode, temp, fan))
