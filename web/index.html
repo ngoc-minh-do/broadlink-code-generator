@@ -346,7 +346,7 @@
             <th>Pos</th><th>Name</th><th>Purpose</th>
           </tr>
           <tr><td>0–1</td><td>Header</td><td>Fixed device ID (<span class="hex-hdr" style="padding:1px 4px;">C2 3D</span>)</td></tr>
-          <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, 1→FF, 2→9F, 3→5F, 4→3F, 5→3F. Dry mode auto→1F</td></tr>
+          <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, quiet→FF, low→9F, medium→5F, high→3F, powerful→3F. Dry mode auto→1F</td></tr>
           <tr><td>3</td><td>Check</td><td>Complement of byte 2: <b>FF − B2</b> (error detection)</td></tr>
           <tr><td>4</td><td>Mode + Temp</td><td>
             <b>Upper nibble (bits 7–4)</b> = temperature (16–30°C). Encoding varies by mode:<br>
@@ -362,8 +362,8 @@
           <tr><td>5</td><td>Check</td><td>Complement of byte 4: <b>FF − B4</b> (error detection)</td></tr>
           <tr><td>6–11</td><td>Repeat</td><td>Copy of bytes 0–5 (for reliability)</td></tr>
           <tr><td>12</td><td>Footer marker</td><td>Fixed <b>D5</b></td></tr>
-          <tr style="background:rgba(0,200,83,0.08);"><td>13</td><td>Fan %</td><td>Fan speed as percentage (1, 40, 60, 80, 100, 102=auto)</td></tr>
-          <tr><td>14–16</td><td>Reserved</td><td>Usually 00; set to 10 at 16°C, 02 at fan speed 5</td></tr>
+          <tr style="background:rgba(0,200,83,0.08);"><td>13</td><td>Fan %</td><td>Fan speed as percentage (quiet=1, low=40, medium=60, high=80, powerful=100, auto=102)</td></tr>
+          <tr><td>14–16</td><td>Reserved</td><td>Usually 00; set to 10 at 16°C, 02 at fan speed powerful</td></tr>
           <tr style="background:rgba(0,200,83,0.08);"><td>17</td><td>Checksum</td><td><b>Sum(B12..B16) % 256</b></td></tr>
         </table>
         <p style="margin-top:6px;font-size:0.7rem;color:var(--text2);">
@@ -984,7 +984,7 @@ function renderByteResults(results) {
         : '<span class="warn"> Checksum FAIL ✗</span>';
     }
     if (r.b13_value !== undefined) {
-      const fanLabels = {'1':'speed 1','40':'speed 2','60':'speed 3','80':'speed 4','100':'speed 5','102':'auto','101':'auto (dry)'};
+      const fanLabels = {'1':'quiet','40':'low','60':'medium','80':'high','100':'powerful','102':'auto','101':'auto (dry)'};
       const fanLabel = fanLabels[String(r.b13_value)] || r.b13_value;
       flagsHtml += ` <span class="ok"> Fan: ${fanLabel}</span>`;
     }

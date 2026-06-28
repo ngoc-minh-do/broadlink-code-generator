@@ -149,7 +149,7 @@ def main():
     )
     parser.add_argument("--all", action="store_true", help="Test all generated combinations")
     parser.add_argument("--mode", nargs="+", help="Mode(s) to test: cool, heat, fan_only, dry")
-    parser.add_argument("--fan", nargs="+", help="Fan speed(s) to test: auto, 1, 2, 3, 4, 5")
+    parser.add_argument("--fan", nargs="+", help="Fan speed(s) to test: auto, quiet, low, medium, high, powerful")
     parser.add_argument("--temps", nargs="+", type=int, help="Temperatures to test, e.g. 20 25 30")
     parser.add_argument("--shuffle", action="store_true", help="Randomize test order")
     parser.add_argument("--count", type=int, default=0, help="Limit number of tests")

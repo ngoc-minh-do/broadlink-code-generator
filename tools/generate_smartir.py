@@ -174,10 +174,10 @@ def encode_temp_b4(temp: int, mode: str) -> int:
 
 
 # Fan speed encoding for B2 (verified with all 5 speeds + auto).
-#   auto = 0xBF, 1=0xFF, 2=0x9F, 3=0x5F, 4=0x3F, 5=0x3F
+#   auto = 0xBF, quiet=0xFF, low=0x9F, medium=0x5F, high=0x3F, powerful=0x3F
 #   For dry mode auto: B2 = 0x1F (not 0xBF)
 
-FAN_B2 = {"auto": 0xBF, "1": 0xFF, "2": 0x9F, "3": 0x5F, "4": 0x3F, "5": 0x3F}
+FAN_B2 = {"auto": 0xBF, "quiet": 0xFF, "low": 0x9F, "medium": 0x5F, "high": 0x3F, "powerful": 0x3F}
 
 def encode_fan_b2(fan: str, mode: str) -> int:
     if mode == "dry" and fan == "auto":
@@ -186,8 +186,8 @@ def encode_fan_b2(fan: str, mode: str) -> int:
 
 
 # Footer B13: fan speed percentage (verified).
-#   1→1, 2→40, 3→60, 4→80, 5→100, auto→102 (dry auto→101)
-FAN_B13 = {"auto": 102, "1": 1, "2": 40, "3": 60, "4": 80, "5": 100}
+#   quiet→1, low→40, medium→60, high→80, powerful→100, auto→102 (dry auto→101)
+FAN_B13 = {"auto": 102, "quiet": 1, "low": 40, "medium": 60, "high": 80, "powerful": 100}
 
 def encode_footer_b13(fan: str, mode: str) -> int:
     if mode == "dry" and fan == "auto":
@@ -242,8 +242,8 @@ def generate_code(mode: str, temp: int, fan: str) -> str:
     b15 = 0x00
     if temp == 16:
         b15 = 0x10  # disambiguation for minimum temperature
-    if fan == "5":
-        b15 = 0x02  # fan speed 5 footer marker (all modes)
+    if fan == "powerful":
+        b15 = 0x02  # fan speed powerful footer marker (all modes)
     ck = sum([0xD5, b13, b14, b15, b16]) % 256
     footer = bytes([0xD5, b13, b14, b15, b16, ck])
 
@@ -263,7 +263,7 @@ def generate_off_code() -> str:
 # ── Climate lookup tables (SmartIR convention) ──────────
 
 CLIMATE_MODES = ["off", "cool", "heat", "fan_only", "dry"]
-FAN_SPEEDS = ["auto", "1", "2", "3", "4", "5"]
+FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]
 TEMP_RANGE = list(range(16, 31))
 
 
