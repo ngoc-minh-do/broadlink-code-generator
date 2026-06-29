@@ -254,6 +254,7 @@
     <button data-tab="visualize">Visualize</button>
     <button data-tab="analyze">Analyze</button>
     <button data-tab="bytes">Bytes</button>
+    <button data-tab="compare">Compare</button>
     <button data-tab="smartir">SmartIR JSON</button>
     <button data-tab="help">Help</button>
   </nav>
@@ -374,6 +375,77 @@
         </p>
       </div>
       <div id="bytes-results"></div>
+    </div>
+  </div>
+
+  <!-- COMPARE TAB -->
+  <div id="tab-compare" class="tab">
+    <div class="card">
+      <h3>Compare Two Base64 Signals</h3>
+      <p style="color:var(--text2);font-size:0.8rem;margin-bottom:8px;">
+        Paste two Broadlink base64 strings to compare their pulse sequences and identify differences.
+      </p>
+      <div class="grid-2">
+        <div>
+          <label class="label">Base64 A</label>
+          <textarea id="cmp-b64a" rows="4" placeholder="First base64 string..."></textarea>
+        </div>
+        <div>
+          <label class="label">Base64 B</label>
+          <textarea id="cmp-b64b" rows="4" placeholder="Second base64 string..."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="compareB64()">Compare</button>
+        <button class="btn-secondary" onclick="swapCompare()">Swap A &harr; B</button>
+        <button class="btn-secondary" onclick="clearCompare()">Clear</button>
+      </div>
+    </div>
+
+    <div id="cmp-summary" style="display:none;">
+      <div class="grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <h3>Signal A</h3>
+          <div id="cmp-stats-a"></div>
+        </div>
+        <div class="card">
+          <h3>Signal B</h3>
+          <div id="cmp-stats-b"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cmp-visual" class="card" style="display:none;">
+      <h3>Overlay Visualization <span style="font-weight:normal;font-size:0.8rem;color:var(--text2);">(Stacked)</span></h3>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+        <span class="tag mark">A Mark</span>
+        <span class="tag" style="background:rgba(255,170,50,0.2);color:#f90;">B Mark</span>
+        <span class="tag space">A Space</span>
+        <span class="tag" style="background:rgba(100,180,255,0.2);color:#6af;">B Space</span>
+        <select id="cmp-zoom" onchange="drawCompareViz()" style="width:auto;">
+          <option value="1">Full view</option>
+          <option value="2">2x zoom</option>
+          <option value="4">4x zoom</option>
+          <option value="8">8x zoom</option>
+          <option value="16">16x zoom</option>
+        </select>
+      </div>
+      <canvas id="cmp-canvas" width="1100" height="400"></canvas>
+    </div>
+
+    <div id="cmp-diff" class="card" style="display:none;">
+      <h3>Pulse Diff <span id="cmp-diff-count" style="font-weight:normal;font-size:0.8rem;color:var(--text2);"></span></h3>
+      <div style="max-height:500px;overflow-y:auto;">
+        <table id="cmp-diff-table">
+          <thead><tr><th>#</th><th>Type</th><th>Pulse A</th><th>Pulse B</th><th>Delta</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="cmp-bitdiff" class="card" style="display:none;">
+      <h3>Bit Diff</h3>
+      <div id="cmp-bitdiff-content"></div>
     </div>
   </div>
 
@@ -761,6 +833,283 @@ function clearCanvas() {
 }
 
 window.addEventListener('resize', () => { if (timings.length > 0) drawVisualization(); });
+
+// ── Compare Tab ─────────────────────────────────────────
+
+let cmpPulsesA = null;
+let cmpPulsesB = null;
+let cmpTimingA = null;
+let cmpTimingB = null;
+
+async function compareB64() {
+  const b64a = document.getElementById('cmp-b64a').value.trim();
+  const b64b = document.getElementById('cmp-b64b').value.trim();
+  if (!b64a || !b64b) return;
+
+  // Show loading
+  document.getElementById('cmp-summary').style.display = 'none';
+  document.getElementById('cmp-visual').style.display = 'none';
+  document.getElementById('cmp-diff').style.display = 'none';
+  document.getElementById('cmp-bitdiff').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code_a: b64a, code_b: b64b })
+    });
+    if (!resp.ok) {
+      alert('Server error: ' + resp.status);
+      return;
+    }
+    const data = await resp.json();
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+    renderCompareResults(data);
+  } catch (e) {
+    alert('Failed: ' + (e.message || e));
+  }
+}
+
+function renderCompareResults(data) {
+  cmpPulsesA = data.pulses_a;
+  cmpPulsesB = data.pulses_b;
+  cmpTimingA = data.a.timing;
+  cmpTimingB = data.b.timing;
+
+  // Summary stats
+  document.getElementById('cmp-summary').style.display = 'block';
+  document.getElementById('cmp-stats-a').innerHTML = formatStats(data.a, cmpTimingA);
+  document.getElementById('cmp-stats-b').innerHTML = formatStats(data.b, cmpTimingB);
+
+  // Visualization
+  document.getElementById('cmp-visual').style.display = cmpPulsesA.length > 0 || cmpPulsesB.length > 0 ? 'block' : 'none';
+  if (cmpPulsesA.length > 0 || cmpPulsesB.length > 0) drawCompareViz();
+
+  // Pulse diff table
+  document.getElementById('cmp-diff').style.display = 'block';
+  document.getElementById('cmp-diff-count').textContent =
+    `(${data.diff_count} of ${data.pulse_diff.length} pulses differ)`;
+  renderPulseDiff(data.pulse_diff, data.a.timing);
+
+  // Bit diff
+  if (data.bit_diff) {
+    document.getElementById('cmp-bitdiff').style.display = 'block';
+    renderBitDiff(data.bit_diff);
+  } else {
+    document.getElementById('cmp-bitdiff').style.display = 'none';
+  }
+
+  // Navigate to Compare tab
+  document.querySelector('[data-tab="compare"]').click();
+}
+
+function formatStats(s, timing) {
+  let html = '';
+  html += `<p><span class="stat">Pulses: ${s.pulse_count}</span> `;
+  html += `<span class="stat">Total: ${(s.total_time_us / 1000).toFixed(1)} ms</span></p>`;
+  html += `<p style="margin-top:6px;font-size:0.82rem;color:var(--text2);">`;
+  html += `Bits: ${s.nbits}  ·  Bytes: ${s.nbytes}</p>`;
+  html += `<p style="font-family:var(--mono);font-size:0.78rem;margin-top:4px;">`;
+  const bytes = s.bytes_hex;
+  for (let i = 0; i < bytes.length; i++) {
+    let cls = 'hex-pld';
+    if (i < 2) cls = 'hex-hdr';
+    else if (i >= 6 && i < 12) cls = 'hex-hdr';
+    else if (i >= 12) cls = 'hex-ftr';
+    html += `<span class="${cls}" style="padding:1px 4px;margin:0 1px;">${bytes[i]}</span>`;
+  }
+  html += '</p>';
+  if (timing) {
+    html += `<p style="font-size:0.72rem;color:var(--text2);margin-top:4px;">`;
+    html += `hdr:${timing.hdr_mark}/${timing.hdr_space}  `;
+    html += `bit:${timing.bit_mark}  `;
+    html += `0:${timing.zero_space}  1:${timing.one_space}`;
+    html += '</p>';
+  }
+  return html;
+}
+
+function renderPulseDiff(diff, timingA) {
+  const tbody = document.getElementById('cmp-diff-table').querySelector('tbody');
+  tbody.innerHTML = '';
+
+  const oneSpace = timingA?.one_space || 1707;
+  const zeroSpace = timingA?.zero_space || 591;
+  const bitMark = timingA?.bit_mark || 591;
+  const margin = 150;
+
+  for (const row of diff) {
+    const tr = document.createElement('tr');
+    if (!row.same) tr.style.background = 'rgba(233,69,96,0.12)';
+
+    let interpA = '', interpB = '';
+    if (row.type === 'space' && row.pulse_a !== null) {
+      if (withinMargin(row.pulse_a, oneSpace, margin)) interpA = '1';
+      else if (withinMargin(row.pulse_a, zeroSpace, margin)) interpA = '0';
+    }
+    if (row.type === 'space' && row.pulse_b !== null) {
+      if (withinMargin(row.pulse_b, oneSpace, margin)) interpB = '1';
+      else if (withinMargin(row.pulse_b, zeroSpace, margin)) interpB = '0';
+    }
+
+    tr.innerHTML = `<td>${row.index + 1}</td>
+      <td class="${row.type}">${row.type}</td>
+      <td>${row.pulse_a !== null ? row.pulse_a + (interpA ? ' (' + interpA + ')' : '') : '—'}</td>
+      <td>${row.pulse_b !== null ? row.pulse_b + (interpB ? ' (' + interpB + ')' : '') : '—'}</td>
+      <td>${row.delta !== null ? (row.delta > 0 ? '+' : '') + row.delta : '—'}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderBitDiff(bitDiff) {
+  let html = `<p style="margin-bottom:8px;">`;
+  html += `<span class="stat">A: ${bitDiff.len_a} bits</span> `;
+  html += `<span class="stat">B: ${bitDiff.len_b} bits</span> `;
+  html += `<span class="stat" style="color:var(--accent);">${bitDiff.diff_count} different</span>`;
+  html += '</p>';
+
+  if (bitDiff.diffs.length > 0) {
+    html += '<div class="binary-bar">';
+    for (const d of bitDiff.diffs) {
+      html += `<span style="font-size:0.7rem;color:var(--text2);">bit${d.index}:</span>`;
+      html += `<span class="bit one" style="margin-right:2px;">A=${d.a}</span>`;
+      html += `<span class="bit zero" style="margin-right:8px;background:var(--accent2);">B=${d.b}</span>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('cmp-bitdiff-content').innerHTML = html;
+}
+
+function drawCompareViz() {
+  const canvas = document.getElementById('cmp-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = 400;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if ((!cmpPulsesA || cmpPulsesA.length === 0) && (!cmpPulsesB || cmpPulsesB.length === 0)) {
+    ctx.fillStyle = '#666';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data. Run a comparison first.', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const zoom = parseInt(document.getElementById('cmp-zoom').value);
+  const pulsesA = cmpPulsesA || [];
+  const pulsesB = cmpPulsesB || [];
+  const totalA = pulsesA.reduce((a, b) => a + b, 0);
+  const totalB = pulsesB.reduce((a, b) => a + b, 0);
+  const maxTotal = Math.max(totalA, totalB);
+  const maxSample = maxTotal / zoom;
+
+  const margin = 30;
+  const drawW = canvas.width - margin * 2;
+  const halfH = (canvas.height - margin * 2) / 2;
+  const topY = margin;
+  const botY = margin + halfH;
+  const amplitude = halfH * 0.35;
+
+  const scaleX = drawW / Math.max(totalA, totalB, maxSample);
+
+  // Draw top baseline (A)
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(margin, topY + halfH / 2);
+  ctx.lineTo(canvas.width - margin, topY + halfH / 2);
+  ctx.stroke();
+
+  // Label A
+  ctx.fillStyle = '#ff6b6b';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText('A', 6, topY + halfH / 2);
+
+  // Draw bottom baseline (B)
+  ctx.beginPath();
+  ctx.moveTo(margin, botY + halfH / 2);
+  ctx.lineTo(canvas.width - margin, botY + halfH / 2);
+  ctx.stroke();
+
+  // Label B
+  ctx.fillStyle = '#ff9900';
+  ctx.fillText('B', 6, botY + halfH / 2);
+
+  // Draw signal A
+  drawSignalOnCanvas(ctx, pulsesA, margin, topY + halfH / 2, amplitude, scaleX, '#ff6b6b', '#4ecdc4');
+
+  // Draw signal B
+  drawSignalOnCanvas(ctx, pulsesB, margin, botY + halfH / 2, amplitude, scaleX, '#ff9900', '#66bbff');
+
+  // Footer
+  ctx.fillStyle = '#888';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(
+    `A: ${pulsesA.length} pulses · ${(totalA / 1000).toFixed(1)}ms  |  B: ${pulsesB.length} pulses · ${(totalB / 1000).toFixed(1)}ms`,
+    canvas.width / 2, canvas.height - 6
+  );
+}
+
+function drawSignalOnCanvas(ctx, pulses, offsetX, yMid, amplitude, scaleX, markColor, spaceColor) {
+  let cumTime = 0;
+  ctx.strokeStyle = spaceColor;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(offsetX, yMid);
+
+  pulses.forEach((v, i) => {
+    const isMark = i % 2 === 0;
+    const screenX = offsetX + cumTime * scaleX;
+
+    if (isMark) {
+      ctx.strokeStyle = markColor;
+      ctx.lineTo(screenX, yMid);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(screenX, yMid);
+      ctx.lineTo(screenX, yMid - amplitude);
+      const endX = offsetX + (cumTime + v) * scaleX;
+      ctx.lineTo(endX, yMid - amplitude);
+      ctx.lineTo(endX, yMid);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(endX, yMid);
+    } else {
+      ctx.strokeStyle = spaceColor;
+      ctx.lineTo(screenX, yMid);
+    }
+    cumTime += v;
+  });
+
+  ctx.strokeStyle = '#555';
+  ctx.lineTo(offsetX + cumTime * scaleX, yMid);
+  ctx.stroke();
+}
+
+function swapCompare() {
+  const elA = document.getElementById('cmp-b64a');
+  const elB = document.getElementById('cmp-b64b');
+  const tmp = elA.value;
+  elA.value = elB.value;
+  elB.value = tmp;
+}
+
+function clearCompare() {
+  document.getElementById('cmp-b64a').value = '';
+  document.getElementById('cmp-b64b').value = '';
+  cmpPulsesA = null;
+  cmpPulsesB = null;
+  document.getElementById('cmp-summary').style.display = 'none';
+  document.getElementById('cmp-visual').style.display = 'none';
+  document.getElementById('cmp-diff').style.display = 'none';
+  document.getElementById('cmp-bitdiff').style.display = 'none';
+  const canvas = document.getElementById('cmp-canvas');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
 
 // ── SmartIR Builder ─────────────────────────────────────
 

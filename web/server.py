@@ -47,6 +47,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == "/api/decode":
             self.handle_decode()
             return
+        if parsed.path == "/api/compare":
+            self.handle_compare()
+            return
         self.send_json({"error": "Not found"}, 404)
 
     def handle_decode(self):
@@ -106,6 +109,118 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             results.append(entry)
 
         self.send_json({"results": results})
+
+    def handle_compare(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode()
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+
+        b64_a = payload.get("code_a", "")
+        b64_b = payload.get("code_b", "")
+        if not b64_a or not b64_b:
+            self.send_json({"error": "Both code_a and code_b required"}, 400)
+            return
+
+        try:
+            from tools.generate_smartir import classify_pulses, pulses_to_bits, bits_to_bytes
+            from broadlink.remote import data_to_pulses
+            import base64
+        except ImportError as e:
+            self.send_json({"error": f"Import failed: {e}"}, 500)
+            return
+
+        def decode_one(b64):
+            raw = base64.b64decode(b64)
+            pulses = data_to_pulses(raw)
+            ctx = classify_pulses(pulses)
+            bits, _ = pulses_to_bits(pulses, ctx)
+            b = bits_to_bytes(bits)
+            # Extract timing values from ctx
+            timing = {
+                "hdr_mark": ctx.get("hdr_mark"),
+                "hdr_space": ctx.get("hdr_space"),
+                "bit_mark": ctx.get("bit_mark"),
+                "zero_space": ctx.get("zero_space"),
+                "one_space": ctx.get("one_space"),
+            }
+            return {
+                "pulses": pulses,
+                "nbits": len(bits),
+                "bits": bits,
+                "nbytes": len(b),
+                "bytes_hex": [f"{x:02X}" for x in b],
+                "timing": timing,
+                "total_time_us": sum(pulses),
+            }
+
+        try:
+            a = decode_one(b64_a)
+            b = decode_one(b64_b)
+        except Exception as e:
+            self.send_json({"error": f"Decode failed: {e}"}, 400)
+            return
+
+        # Build per-pulse diff
+        max_len = max(len(a["pulses"]), len(b["pulses"]))
+        pulse_diff = []
+        diff_count = 0
+        for i in range(max_len):
+            pa = a["pulses"][i] if i < len(a["pulses"]) else None
+            pb = b["pulses"][i] if i < len(b["pulses"]) else None
+            same = pa == pb
+            if not same and pa is not None and pb is not None:
+                diff_count += 1
+            pulse_type = "mark" if i % 2 == 0 else "space"
+            pulse_diff.append({
+                "index": i,
+                "type": pulse_type,
+                "pulse_a": pa,
+                "pulse_b": pb,
+                "same": same,
+                "delta": (pb - pa) if (pa is not None and pb is not None) else None,
+            })
+
+        # Bit-level diff
+        bit_diff = None
+        if len(a["bits"]) == len(b["bits"]):
+            bit_diffs = []
+            for i in range(len(a["bits"])):
+                if a["bits"][i] != b["bits"][i]:
+                    bit_diffs.append({"index": i, "a": a["bits"][i], "b": b["bits"][i]})
+            bit_diff = {
+                "len_a": len(a["bits"]),
+                "len_b": len(b["bits"]),
+                "diff_count": len(bit_diffs),
+                "diffs": bit_diffs[:50],  # limit for display
+            }
+
+        self.send_json({
+            "a": {
+                "pulse_count": len(a["pulses"]),
+                "total_time_us": a["total_time_us"],
+                "nbits": a["nbits"],
+                "nbytes": a["nbytes"],
+                "bytes_hex": a["bytes_hex"],
+                "timing": a["timing"],
+            },
+            "b": {
+                "pulse_count": len(b["pulses"]),
+                "total_time_us": b["total_time_us"],
+                "nbits": b["nbits"],
+                "nbytes": b["nbytes"],
+                "bytes_hex": b["bytes_hex"],
+                "timing": b["timing"],
+            },
+            "pulses_a": a["pulses"],
+            "pulses_b": b["pulses"],
+            "pulse_diff": pulse_diff,
+            "diff_count": diff_count,
+            "bit_diff": bit_diff,
+        })
 
     def handle_analyze(self, parsed):
         qs = urllib.parse.parse_qs(parsed.query)
