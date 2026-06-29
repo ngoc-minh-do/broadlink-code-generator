@@ -197,29 +197,43 @@ def encode_footer_b13(fan: str, mode: str) -> int:
 
 # ── Code generator ──────────────────────────────────────
 
-# IR timing constants (averaged from known captures)
-_HDR_MARK, _HDR_SPACE = 4600, 4630
-_BIT_MARK = 560
-_ZERO_SPACE, _ONE_SPACE = 560, 1690
-_GAP = 109455
+# IR timing constants — chosen so int(pulse / 32.84) hits the correct
+# raw-byte tick values from captured signals (0x8c,0x8d,0x12,0x34).
+# The real remote has natural ±1-tick jitter; these values produce the
+# "center" encoding that the AC device accepts.
+_HDR_MARK = 4598      # → raw byte 0x8c  (140 ticks)
+_HDR_SPACE = 4631     # → raw byte 0x8d  (141 ticks)
+_BIT_MARK = 592       # → raw byte 0x12  (18 ticks)
+_ZERO_SPACE = 592     # → raw byte 0x12  (18 ticks)
+_ONE_SPACE = 1708     # → raw byte 0x34  (52 ticks)
+_SEG_GAP = 5485       # inter-segment gap (~5.5ms, from captures)
+_GAP = 109455         # final inter-message gap
+
+
+def _segment_to_pulses(bits_48: str, gap: int) -> list:
+    """Build pulse sequence for one 6-byte (48-bit) segment."""
+    pulses = [_HDR_MARK, _HDR_SPACE]
+    for bit in bits_48:
+        pulses.append(_BIT_MARK)
+        pulses.append(_ONE_SPACE if bit == "1" else _ZERO_SPACE)
+    pulses.append(_BIT_MARK)  # trailing mark
+    pulses.append(gap)        # inter-segment or final gap
+    return pulses
 
 
 def _bytes_to_ir_packet(msg_bytes: bytes) -> bytes:
     """Convert logical protocol bytes to a Broadlink IR packet (base64-ready).
 
-    1. Convert bytes to bit string
-    2. Build pulse sequence (header + data pairs + trailing mark + gap)
-    3. Encode to Broadlink format via pulses_to_data()
-    4. Verify roundtrip bit accuracy
+    The remote sends the 18-byte message as three 6-byte segments, each
+    prefixed with a header and separated by a 5.5ms gap. This produces
+    300 pulses (3 × 100) matching captured signals exactly.
     """
     bits = "".join(f"{b:08b}" for b in msg_bytes)
 
-    pulses = [_HDR_MARK, _HDR_SPACE]
-    for bit in bits:
-        pulses.append(_BIT_MARK)
-        pulses.append(_ONE_SPACE if bit == "1" else _ZERO_SPACE)
-    pulses.append(_BIT_MARK)  # trailing mark
-    pulses.append(_GAP)       # inter-message gap
+    pulses = []
+    pulses += _segment_to_pulses(bits[:48], _SEG_GAP)
+    pulses += _segment_to_pulses(bits[48:96], _SEG_GAP)
+    pulses += _segment_to_pulses(bits[96:144], _GAP)
 
     return pulses_to_data(pulses)
 
