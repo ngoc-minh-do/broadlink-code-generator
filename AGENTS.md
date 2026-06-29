@@ -11,6 +11,9 @@
   - Decodes Broadlink base64 into byte-level protocol analysis, identifies the message structure (payload fields, complementary pairs, checksum), and exports a SmartIR-compatible JSON ready for Home Assistant.
   - Options: `--json` (print JSON), `--missing` (show gaps + suggested captures), `--generate` (produce inferred codes for all temp/mode/fan combos), `--save FILE.json` (write to file).
 - Interactive test generated codes against physical remote: `uv run python tools/test_generated.py`
+- Guided capture of missing IR codes: `uv run python tools/capture_missing.py`
+  - Reads existing captures, shows what's missing, interactively guides through each capture.
+  - Options: `--mode heat cool` (filter modes), `--dry-run` (show missing only), `--fan-variants` (also capture fan variants for already-captured temps).
   - Picks generated codes, prompts you to press the matching button on the remote, captures via Broadlink, compares byte-level match.
   - Options: `--all` (every combination), `--mode cool heat --temps 20 25 30` (specific), `--shuffle`, `--count 5`.
 - Start the IR Learner & SmartIR Builder web app: `uv run python web/server.py`
