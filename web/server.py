@@ -290,6 +290,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+        if status >= 400:
+            sys.stderr.write(f"[{self.path}] {status} {json.dumps(data)}\n")
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"[{self.address_string()}] {args[0]}\n")
