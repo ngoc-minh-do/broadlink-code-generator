@@ -132,15 +132,17 @@ def load_test_list(args):
                 for fan in fans:
                     tests.append((mode, temp, fan))
     else:
-        # Default: pick 5 representative combos
-        tests = [
-            ("cool", 25, "auto"),
-            ("cool", 20, "auto"),
-            ("heat", 25, "auto"),
-            ("dry", 25, "auto"),
-            ("fan_only", 0, "auto"),
-            ("heat_cool", 25, "auto"),
-        ]
+        modes = args.mode or ["cool", "heat", "fan_only", "dry", "heat_cool"]
+        mode_defaults = {
+            "cool": [("cool", 25, "auto"), ("cool", 20, "auto")],
+            "heat": [("heat", 25, "auto")],
+            "dry": [("dry", 25, "auto")],
+            "fan_only": [("fan_only", 0, "auto")],
+            "heat_cool": [("heat_cool", 25, "auto")],
+        }
+        tests = []
+        for mode in modes:
+            tests.extend(mode_defaults.get(mode, [(mode, 25, "auto")]))
 
     if args.shuffle:
         random.shuffle(tests)
