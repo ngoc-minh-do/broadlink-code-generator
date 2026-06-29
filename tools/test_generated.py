@@ -145,9 +145,20 @@ def load_test_list(args):
             "fan_only": [("fan_only", 0, "auto")],
             "heat_cool": [("heat_cool", 25, "auto")],
         }
-        tests = []
-        for mode in modes:
-            tests.extend(mode_defaults.get(mode, [(mode, 25, "auto")]))
+        if args.fan:
+            tests = []
+            for mode in modes:
+                default_temp = 25 if mode != "fan_only" else 0
+                if mode in ("dry", "heat_cool"):
+                    fans_to_use = ["auto"]
+                else:
+                    fans_to_use = args.fan
+                for fan in fans_to_use:
+                    tests.append((mode, default_temp, fan))
+        else:
+            tests = []
+            for mode in modes:
+                tests.extend(mode_defaults.get(mode, [(mode, 25, "auto")]))
 
     if args.shuffle:
         random.shuffle(tests)
