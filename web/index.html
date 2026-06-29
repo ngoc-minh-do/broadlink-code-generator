@@ -335,7 +335,7 @@
       <textarea id="bytes-input" rows="6" placeholder="JgAuAYuNETQRNBERERESEBIRETQRERIQEhESMxE0ETMSMxIR..."></textarea>
       <div class="btn-row">
         <button class="btn-primary" onclick="decodeBytes()">Decode</button>
-        <button class="btn-secondary" onclick="loadFewForBytes()">Load captures/Toshiba_RAS-K281X.txt</button>
+        <button class="btn-secondary" onclick="loadFewForBytes()">Load captures/Toshiba-JP_RAS‒G221M.txt</button>
       </div>
     </div>
     <div id="bytes-output" class="card">
@@ -1233,12 +1233,12 @@ function downloadJSON() {
 
 async function loadFewForBytes() {
   try {
-    const resp = await fetch('/captures/Toshiba_RAS-K281X.txt');
+    const resp = await fetch('/captures/Toshiba-JP_RAS‒G221M.txt');
     if (!resp.ok) throw new Error('not found');
     const text = await resp.text();
     document.getElementById('bytes-input').value = text.trim();
   } catch (e) {
-    alert('Failed to load captures/Toshiba_RAS-K281X.txt');
+    alert('Failed to load captures/Toshiba-JP_RAS‒G221M.txt');
   }
 }
 

@@ -33,7 +33,7 @@ from tools.generate_smartir import parse_label
 
 DEVICE_IP = os.environ["BROADLINK_IP"]
 TIMEOUT = 30
-CAPTURE_PATH = Path("captures/Toshiba_RAS-K281X.txt")
+CAPTURE_PATH = Path("captures/Toshiba-JP_RAS‒G221M.txt")
 
 CLIMATE_MODES = ["cool", "heat", "dry", "fan_only"]
 FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]

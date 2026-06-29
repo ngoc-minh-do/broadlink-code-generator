@@ -224,7 +224,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def handle_analyze(self, parsed):
         qs = urllib.parse.parse_qs(parsed.query)
-        filepath = qs.get("file", ["captures/Toshiba_RAS-K281X.txt"])[0]
+        filepath = qs.get("file", ["captures/Toshiba-JP_RAS‒G221M.txt"])[0]
         fullpath = ROOT / filepath
 
         try:
@@ -296,7 +296,7 @@ def main():
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         print(f"Serving at http://localhost:{PORT}")
         print(f"  App      : http://localhost:{PORT}/")
-        print(f"  API      : http://localhost:{PORT}/api/analyze?file=captures/Toshiba_RAS-K281X.txt")
+        print(f"  API      : http://localhost:{PORT}/api/analyze?file=captures/Toshiba-JP_RAS‒G221M.txt")
         print(f"  Captures : {CAPTURES}")
         try:
             httpd.serve_forever()

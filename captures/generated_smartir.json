@@ -1,7 +1,7 @@
 {
-  "manufacturer": "Toshiba",
+  "manufacturer": "Toshiba JP",
   "supportedModels": [
-    "Toshiba AC"
+    "RAS‒G221M"
   ],
   "supportedController": "Broadlink",
   "commandsEncoding": "Base64",
