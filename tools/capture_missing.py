@@ -64,6 +64,14 @@ def compute_missing(
     stage2: list = []
 
     for mode in target_modes:
+        # dry/heat_cool: fan always auto (not independently controllable)
+        if mode in ("dry", "heat_cool"):
+            for temp in TEMP_RANGE:
+                key = (mode, temp, "auto")
+                if key not in existing:
+                    stage1.append(key)
+            continue
+
         if mode == "fan_only":
             for fan in target_fans:
                 key = (mode, None, fan)

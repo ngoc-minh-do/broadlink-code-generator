@@ -155,12 +155,12 @@ def encode_temp_b4(temp: int, mode: str) -> int:
 
 # Fan speed encoding for B2 (verified with all 5 speeds + auto).
 #   auto = 0xBF, quiet=0xFF, low=0x9F, medium=0x5F, high=0x3F, powerful=0x3F
-#   For dry mode auto: B2 = 0x1F (not 0xBF)
+#   dry/heat_cool always auto fan: B2 = 0x1F (not 0xBF)
 
 FAN_B2 = {"auto": 0xBF, "quiet": 0xFF, "low": 0x9F, "medium": 0x5F, "high": 0x3F, "powerful": 0x3F}
 
 def encode_fan_b2(fan: str, mode: str) -> int:
-    if mode in ("dry", "heat_cool") and fan == "auto":
+    if mode in ("dry", "heat_cool"):
         return 0x1F
     return FAN_B2.get(fan, 0xBF)
 
@@ -170,7 +170,7 @@ def encode_fan_b2(fan: str, mode: str) -> int:
 FAN_B13 = {"auto": 102, "quiet": 1, "low": 40, "medium": 60, "high": 80, "powerful": 100}
 
 def encode_footer_b13(fan: str, mode: str) -> int:
-    if mode in ("dry", "heat_cool") and fan == "auto":
+    if mode in ("dry", "heat_cool"):
         return 101
     return FAN_B13.get(fan, 102)
 
