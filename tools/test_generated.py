@@ -73,7 +73,7 @@ def capture(dev, timeout=TIMEOUT):
 
 
 def compare_signals(gen_b64, cap_b64):
-    """Decode both base64 to logical bytes and return (match, gen_bytes, cap_bytes)."""
+    """Decode both base64 and return (match, gen_bytes, cap_bytes, detail, gen_pulses, cap_pulses)."""
     try:
         gen_raw = base64.b64decode(gen_b64)
         gen_pulses = data_to_pulses(gen_raw)
@@ -81,7 +81,7 @@ def compare_signals(gen_b64, cap_b64):
         gen_bits, _ = pulses_to_bits(gen_pulses, gen_ctx)
         gen_bytes = bits_to_bytes(gen_bits)
     except Exception as e:
-        return False, None, None, f"gen decode: {e}"
+        return False, None, None, None, f"gen decode: {e}", None
 
     try:
         cap_raw = base64.b64decode(cap_b64)
@@ -90,20 +90,26 @@ def compare_signals(gen_b64, cap_b64):
         cap_bits, _ = pulses_to_bits(cap_pulses, cap_ctx)
         cap_bytes = bits_to_bytes(cap_bits)
     except Exception as e:
-        return False, gen_bytes, None, f"cap decode: {e}"
+        return False, gen_bytes, None, gen_pulses, f"cap decode: {e}", None
 
-    match = gen_bytes == cap_bytes
-    detail = ""
-    if not match and gen_bytes and cap_bytes:
+    byte_match = gen_bytes == cap_bytes
+    pulse_match = len(gen_pulses) == len(cap_pulses)
+
+    parts = []
+    if not byte_match and gen_bytes and cap_bytes:
         diffs = []
         for i in range(min(len(gen_bytes), len(cap_bytes))):
             if gen_bytes[i] != cap_bytes[i]:
                 diffs.append(f"B{i}:{gen_bytes[i]:02X}h≠{cap_bytes[i]:02X}h")
         if diffs:
-            detail = " ".join(diffs[:5])
+            parts.append(" ".join(diffs[:5]))
         if len(gen_bytes) != len(cap_bytes):
-            detail += f" len:{len(gen_bytes)}≠{len(cap_bytes)}"
-    return match, gen_bytes, cap_bytes, detail
+            parts.append(f"len:{len(gen_bytes)}≠{len(cap_bytes)}")
+    if not pulse_match:
+        parts.append(f"pulses:{len(gen_pulses)}≠{len(cap_pulses)}")
+
+    detail = " ".join(parts) if parts else ""
+    return byte_match, gen_bytes, cap_bytes, detail, gen_pulses, cap_pulses
 
 
 def load_test_list(args):
@@ -200,13 +206,23 @@ def main():
             skipped += 1
             continue
 
-        match, gen_b, cap_b, detail = compare_signals(gen_b64, cap_b64)
+        match, gen_b, cap_b, detail, gen_p, cap_p = compare_signals(gen_b64, cap_b64)
+
+        pulse_info = ""
+        if gen_p is not None:
+            pulse_info = f"  gen pulses={len(gen_p)}"
+            if cap_p is not None:
+                pulse_info += f"  cap pulses={len(cap_p)}"
+                if len(gen_p) != len(cap_p):
+                    pulse_info += "  ✗"
+                else:
+                    pulse_info += "  ✓"
 
         if match:
-            print(f"  ✓ MATCH")
+            print(f"  ✓ MATCH{pulse_info}")
             passed += 1
         else:
-            print(f"  ✗ MISMATCH {detail}")
+            print(f"  ✗ MISMATCH{pulse_info} {detail}")
             if gen_b:
                 gen_hex = " ".join(f"{x:02X}" for x in gen_b[:6])
                 print(f"    gen:  [{gen_hex}...]")

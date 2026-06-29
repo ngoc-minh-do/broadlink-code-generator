@@ -256,6 +256,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "label": label,
                 "nbits": len(d["bits"]),
                 "nbytes": len(b),
+                "pulse_count": len(d["pulses"]),
                 "bytes_hex": [f"{x:02X}" for x in b],
                 "b64": d["b64"],
                 "has_footer": len(b) >= 18,
