@@ -7,7 +7,7 @@
 
 ## Commands
 - Run the main capture script: `uv run python main.py`
-- Reverse-engineer IR protocol & generate SmartIR JSON: `uv run python tools/generate_smartir.py captures/Toshiba-JP_RAS‒G221M.txt`
+- Reverse-engineer IR protocol & generate SmartIR JSON: `uv run python tools/generate_smartir.py captures/Toshiba-JP.txt`
   - Decodes Broadlink base64 into byte-level protocol analysis, identifies the message structure (payload fields, complementary pairs, checksum), and exports a SmartIR-compatible JSON ready for Home Assistant.
   - Options: `--json` (print JSON), `--missing` (show gaps + suggested captures), `--generate` (produce inferred codes for all temp/mode/fan combos), `--save FILE.json` (write to file).
 - Interactive test generated codes against physical remote: `uv run python tools/test_generated.py`
@@ -21,7 +21,7 @@
 ## Architecture
 - `main.py` — discovers a Broadlink device on the local network at hardcoded IP `192.168.0.120`, enters IR learning mode, waits up to 30s for a button press, then prints the captured packet as hex and base64.
 - `tools/generate_smartir.py` — protocol reverse-engineering tool. Decodes Broadlink base64 to raw pulses via `broadlink.remote.data_to_pulses()`, classifies marks/spaces, converts to bits/bytes, compares patterns across captures to identify which bytes encode temperature/mode/fan, and produces SmartIR JSON.
-- `captures/` — saved IR captures. `Toshiba-JP_RAS‒G221M.txt` is the primary capture file (label+base64 pairs). `*.txt` are raw IRremoteESP8266-format timing arrays.
+- `captures/` — saved IR captures. `Toshiba-JP.txt` is the primary capture file (label+base64 pairs). `*.txt` are raw IRremoteESP8266-format timing arrays.
 - `web/` — single-page HTML app for visualizing IR timings and building SmartIR JSON manually.
 - `uv.lock` is committed — treat this as the lockfile source of truth.
 
@@ -32,8 +32,8 @@
 - Byte 4 encodes temperature+mode: upper nibble = temperature, lower nibble = mode (0=cool, 4=fan_only/dry, 8=heat_cool, C=heat). fan_only mode always uses B4=0xE4 (temp not applicable).
 - Temperature encoding (upper nibble of B4) is mode-independent lookup table. 16/17°C share the same code; all other temps (18–30°C) have unique nibbles: 16→0x0, 17→0x0, 18→0x1, 19→0x3, 20→0x2, 21→0x6, 22→0x7, 23→0x5, 24→0x4, 25→0xC, 26→0xD, 27→0x9, 28→0x8, 29→0xA, 30→0xB.
 - Footer: B12=0xD5 fixed, B13 encodes fan speed % (quiet=1, low=40, medium=60, high=80, powerful=100, auto=102, dry/heat_cool auto=101). B17 = sum(B12..B16) mod 256 (checksum).
-- To add captures, edit `captures/Toshiba-JP_RAS‒G221M.txt` with `<label>\n<base64>` pairs. Label format: `<temp> <mode> <fan>` (use `x` for temp when not applicable, e.g. `x fan_only auto`). Re-run `generate_smartir.py --generate --save` to update the JSON.
+- To add captures, edit `captures/Toshiba-JP.txt` with `<label>\n<base64>` pairs. Label format: `<temp> <mode> <fan>` (use `x` for temp when not applicable, e.g. `x fan_only auto`). Re-run `generate_smartir.py --generate --save` to update the JSON.
 
 ## Gotchas
 - `main.py` has a hardcoded device IP. The Broadlink device must be reachable on the local network for the script to work.
-- `Toshiba-JP_RAS‒G221M.txt` captures use Broadlink base64 format (output of `main.py`).
+- `Toshiba-JP.txt` captures use Broadlink base64 format (output of `main.py`).

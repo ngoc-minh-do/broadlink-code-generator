@@ -62,7 +62,7 @@ def main():
         from tools.generate_smartir import read_captures
 
         capture_path = (
-            Path(__file__).resolve().parent.parent / "captures" / "Toshiba-JP_RAS‒G221M.txt"
+            Path(__file__).resolve().parent.parent / "captures" / "Toshiba-JP.txt"
         )
         signals = read_captures(str(capture_path))
         found = None

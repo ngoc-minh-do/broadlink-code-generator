@@ -6,8 +6,8 @@ Decodes Broadlink base64 captures into byte-level protocol analysis, identifies
 which bytes encode temperature/mode/fan, and generates SmartIR-compatible JSON.
 
 Usage:
-  uv run python tools/generate_smartir.py captures/Toshiba-JP_RAS‒G221M.txt
-  uv run python tools/generate_smartir.py captures/Toshiba-JP_RAS‒G221M.txt --json --save out.json
+  uv run python tools/generate_smartir.py captures/Toshiba-JP.txt
+  uv run python tools/generate_smartir.py captures/Toshiba-JP.txt --json --save out.json
 
 Protocol (18 bytes = 144 bits):
   B0-B1  : fixed header  C2 3D
@@ -367,7 +367,7 @@ def main():
         description="Analyze Broadlink IR captures & generate SmartIR JSON"
     )
     parser.add_argument(
-        "capture_file", nargs="?", default="captures/Toshiba-JP_RAS‒G221M.txt",
+        "capture_file", nargs="?", default="captures/Toshiba-JP.txt",
         help="Capture file (label + base64 pairs)",
     )
     parser.add_argument("--json", action="store_true", help="Output SmartIR JSON to stdout")
