@@ -388,21 +388,18 @@ def main():
 
     sj = build_smartir(decoded, generate_all=args.generate)
 
-    # Count verified vs inferred
-    verified_count = 0
-    inferred_count = 0
-    for label, d in decoded.items():
+    verified = set()
+    for label in decoded:
         p = parse_label(label)
-        if p["mode"] and p["mode"] != "off":
-            verified_count += 1
+        if p["mode"] != "off" and p["temp"] is not None:
+            verified.add((p["mode"], p["temp"], p["fan"]))
+    verified_count = len(verified)
+
+    total = 1 if sj["commands"].get("off") else 0
     for mode in CLIMATE_MODES[1:]:
         if mode in sj["commands"]:
-            verified_count += len(sj["commands"][mode])
-    # Quick count
-    total = sum(
-        len(sj["commands"].get(m, {}))
-        for m in CLIMATE_MODES[1:]
-    ) + (1 if sj["commands"].get("off") else 0)
+            for fan in sj["commands"][mode]:
+                total += len(sj["commands"][mode][fan])
 
     if args.generate:
         print(f"\n═══ Generated Codes ═══")
