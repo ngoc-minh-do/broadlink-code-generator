@@ -35,7 +35,7 @@ DEVICE_IP = os.environ["BROADLINK_IP"]
 TIMEOUT = 30
 CAPTURE_PATH = Path("captures/Toshiba-JP_RAS‒G221M.txt")
 
-CLIMATE_MODES = ["cool", "heat", "dry", "fan_only"]
+CLIMATE_MODES = ["cool", "heat", "dry", "fan_only", "heat_cool"]
 FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]
 TEMP_RANGE = list(range(16, 31))
 

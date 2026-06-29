@@ -147,7 +147,7 @@ def encode_temp_b4(temp: int, mode: str) -> int:
 
     temp_nib = TEMP_NIB.get(temp, 0x0)
 
-    mode_nibs = {"cool": 0x0, "fan_only": 0x4, "heat": 0xC, "dry": 0x4}
+    mode_nibs = {"cool": 0x0, "fan_only": 0x4, "heat": 0xC, "dry": 0x4, "heat_cool": 0x8}
     mode_nib = mode_nibs.get(mode, 0x0)
 
     return (temp_nib << 4) | mode_nib
@@ -160,7 +160,7 @@ def encode_temp_b4(temp: int, mode: str) -> int:
 FAN_B2 = {"auto": 0xBF, "quiet": 0xFF, "low": 0x9F, "medium": 0x5F, "high": 0x3F, "powerful": 0x3F}
 
 def encode_fan_b2(fan: str, mode: str) -> int:
-    if mode == "dry" and fan == "auto":
+    if mode in ("dry", "heat_cool") and fan == "auto":
         return 0x1F
     return FAN_B2.get(fan, 0xBF)
 
@@ -170,7 +170,7 @@ def encode_fan_b2(fan: str, mode: str) -> int:
 FAN_B13 = {"auto": 102, "quiet": 1, "low": 40, "medium": 60, "high": 80, "powerful": 100}
 
 def encode_footer_b13(fan: str, mode: str) -> int:
-    if mode == "dry" and fan == "auto":
+    if mode in ("dry", "heat_cool") and fan == "auto":
         return 101
     return FAN_B13.get(fan, 102)
 
@@ -256,7 +256,7 @@ def generate_off_code() -> str:
 
 # ── Climate lookup tables (SmartIR convention) ──────────
 
-CLIMATE_MODES = ["off", "cool", "heat", "fan_only", "dry"]
+CLIMATE_MODES = ["off", "cool", "heat", "fan_only", "dry", "heat_cool"]
 FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]
 TEMP_RANGE = list(range(16, 31))
 
@@ -308,13 +308,13 @@ def build_smartir(decoded, generate_all=False) -> dict:
 
     return {
         "manufacturer": "Toshiba JP",
-        "supportedModels": ["RAS‒G221M"],
+        "supportedModels": ["RAS‒G221M", "RAS-K281X"],
         "supportedController": "Broadlink",
         "commandsEncoding": "Base64",
         "minTemperature": 16.0,
         "maxTemperature": 30.0,
         "precision": 1.0,
-        "operationModes": ["heat", "cool", "dry", "fan_only"],
+        "operationModes": ["heat", "cool", "dry", "fan_only", "heat_cool"],
         "fanModes": ["auto", "quiet", "low", "medium", "high", "powerful"],
         "commands": commands,
     }
@@ -414,7 +414,7 @@ def main():
 
     if args.missing:
         all_temps = list(range(16, 31))
-        all_modes = ["cool", "heat", "fan_only", "dry"]
+        all_modes = ["cool", "heat", "fan_only", "dry", "heat_cool"]
         missing = []
         have = set()
         for label in decoded:

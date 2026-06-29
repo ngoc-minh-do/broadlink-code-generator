@@ -347,10 +347,10 @@
             <th>Pos</th><th>Name</th><th>Purpose</th>
           </tr>
           <tr><td>0–1</td><td>Header</td><td>Fixed device ID (<span class="hex-hdr" style="padding:1px 4px;">C2 3D</span>)</td></tr>
-          <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, quiet→FF, low→9F, medium→5F, high→3F, powerful→3F. Dry mode auto→1F</td></tr>
+          <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, quiet→FF, low→9F, medium→5F, high→3F, powerful→3F. Dry/heat_cool mode auto→1F</td></tr>
           <tr><td>3</td><td>Check</td><td>Complement of byte 2: <b>FF − B2</b> (error detection)</td></tr>
            <tr><td>4</td><td>Mode + Temp</td><td>
-            <b>Upper nibble (bits 7–4)</b> = temperature. Same encoding for cool/heat/dry:<br>
+            <b>Upper nibble (bits 7–4)</b> = temperature. Same encoding for all modes:<br>
             <span style="font-size:0.72rem;">
             <table style="margin:4px 0;border-collapse:collapse;text-align:center;">
               <tr style="background:var(--surface2);">
@@ -368,17 +368,17 @@
              <b>Lower nibble (bits 3–0)</b> = mode:
             <table style="margin:4px 0;border-collapse:collapse;text-align:center;">
               <tr style="background:var(--surface2);">
-                <td style="padding:2px 6px;">cool</td><td style="padding:2px 6px;">dry</td><td style="padding:2px 6px;">fan_only</td><td style="padding:2px 6px;">heat</td>
+                <td style="padding:2px 6px;">cool</td><td style="padding:2px 6px;">dry</td><td style="padding:2px 6px;">fan_only</td><td style="padding:2px 6px;">heat_cool</td><td style="padding:2px 6px;">heat</td>
               </tr>
               <tr>
-                <td>0</td><td>4</td><td>4</td><td>C</td>
+                <td>0</td><td>4</td><td>4</td><td>8</td><td>C</td>
               </tr>
             </table>
           </td></tr>
           <tr><td>5</td><td>Check</td><td>Complement of byte 4: <b>FF − B4</b> (error detection)</td></tr>
           <tr><td>6–11</td><td>Repeat</td><td>Copy of bytes 0–5 (for reliability)</td></tr>
           <tr><td>12</td><td>Footer marker</td><td>Fixed <b>D5</b></td></tr>
-          <tr style="background:rgba(0,200,83,0.08);"><td>13</td><td>Fan %</td><td>Fan speed as percentage (quiet=1, low=40, medium=60, high=80, powerful=100, auto=102)</td></tr>
+          <tr style="background:rgba(0,200,83,0.08);"><td>13</td><td>Fan %</td><td>Fan speed as percentage (quiet=1, low=40, medium=60, high=80, powerful=100, auto=102, dry/heat_cool auto=101)</td></tr>
           <tr><td>14–16</td><td>Reserved</td><td>Usually 00; set to 10 at 16°C, 02 at fan speed powerful</td></tr>
           <tr style="background:rgba(0,200,83,0.08);"><td>17</td><td>Checksum</td><td><b>Sum(B12..B16) % 256</b></td></tr>
         </table>
@@ -1348,7 +1348,7 @@ function renderByteResults(results) {
         : '<span class="warn"> Checksum FAIL ✗</span>';
     }
     if (r.b13_value !== undefined) {
-      const fanLabels = {'1':'quiet','40':'low','60':'medium','80':'high','100':'powerful','102':'auto','101':'auto (dry)'};
+      const fanLabels = {'1':'quiet','40':'low','60':'medium','80':'high','100':'powerful','102':'auto','101':'auto (dry/heat_cool)'};
       const fanLabel = fanLabels[String(r.b13_value)] || r.b13_value;
       flagsHtml += ` <span class="ok"> Fan: ${fanLabel}</span>`;
     }

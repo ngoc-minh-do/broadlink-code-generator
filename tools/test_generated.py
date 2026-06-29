@@ -126,7 +126,7 @@ def load_test_list(args):
                         continue
                     tests.append((mode, temp, fan))
     elif args.temps:
-        for mode in (args.mode or ["cool", "heat", "fan_only", "dry"]):
+        for mode in (args.mode or ["cool", "heat", "fan_only", "dry", "heat_cool"]):
             fans = args.fan or FAN_SPEEDS
             for temp in args.temps:
                 for fan in fans:
@@ -139,6 +139,7 @@ def load_test_list(args):
             ("heat", 25, "auto"),
             ("dry", 25, "auto"),
             ("fan_only", 0, "auto"),
+            ("heat_cool", 25, "auto"),
         ]
 
     if args.shuffle:
