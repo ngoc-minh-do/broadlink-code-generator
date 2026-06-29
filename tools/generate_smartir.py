@@ -206,14 +206,17 @@ def _bytes_to_ir_packet(msg_bytes: bytes) -> bytes:
 
     The remote sends the 18-byte message as three 6-byte segments, each
     prefixed with a header and separated by a 5.5ms gap. This produces
-    300 pulses (3 × 100) matching captured signals exactly.
+    300 pulses (3 × 100).
+    Handles variable-length messages: OFF (12 bytes) → 2 segments (200 pulses), normal (18 bytes) → 3 segments (300).
     """
     bits = "".join(f"{b:08b}" for b in msg_bytes)
+    total_bits = len(bits)
 
     pulses = []
-    pulses += _segment_to_pulses(bits[:48], _SEG_GAP)
-    pulses += _segment_to_pulses(bits[48:96], _SEG_GAP)
-    pulses += _segment_to_pulses(bits[96:144], _GAP)
+    for offset in range(0, total_bits, 48):
+        segment_bits = bits[offset : offset + 48]
+        gap = _GAP if offset + 48 >= total_bits else _SEG_GAP
+        pulses += _segment_to_pulses(segment_bits, gap)
 
     return pulses_to_data(pulses)
 
