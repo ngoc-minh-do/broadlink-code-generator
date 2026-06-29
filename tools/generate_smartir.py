@@ -124,48 +124,28 @@ def parse_label(label: str) -> dict:
 
 # ── Protocol field encoders ─────────────────────────────
 
-# Temperature encoding for B4 upper nibble (verified with 16/24/25/26/30°C).
-# Derived formulas (t-16 as 4-bit value b3 b2 b1 b0):
-#   B4[4] = b1
-#   B4[5] = b2 & b1
-#   B4[6] = b3 ^ b2
-#   B4[7] = 1 if t >= 25 (i.e. t-16 >= 9)
-# Some adjacent temperatures produce the same B4 value (common in AC remotes).
+# Temperature → B4 upper nibble lookup (verified from all 15 heat captures).
+# Same encoding across all modes (cool, heat, dry) — only mode nibble differs.
+# 16 and 17°C share the B4 nibble; footer B15=0x10 disambiguates 16°C.
+
+TEMP_NIB = {
+    16: 0x0, 17: 0x0,
+    18: 0x1, 19: 0x3,
+    20: 0x2, 21: 0x6,
+    22: 0x7, 23: 0x5,
+    24: 0x4, 25: 0xC,
+    26: 0xD, 27: 0x9,
+    28: 0x8, 29: 0xA,
+    30: 0xB,
+}
+
 
 def encode_temp_b4(temp: int, mode: str) -> int:
-    """Return the B4 byte value (upper nibble = temperature, lower = mode).
-
-    Each mode has its own temperature encoding formula (t-16 as 4-bit b3b2b1b0):
-      cool:  bit4=b1, bit5=b2,        bit6=b3&~b2,  bit7=1 if t≥25
-      heat:  bit4=b1, bit5=b2&b3,     bit6=b3⊕b2,   bit7=1 if t≥25
-      dry:   bit4=b1, bit5=b2&~b1,    bit6=b3,      bit7=1 if t≥25
-    Some adjacent temperatures produce the same code.
-
-    fan_only mode always sends B4=0xE4 (temp is not applicable).
-    """
+    """Return the B4 byte value (upper nibble = temperature, lower = mode)."""
     if mode == "fan_only":
         return 0xE4
 
-    td = temp - 16
-    b3, b2, b1 = (td >> 3) & 1, (td >> 2) & 1, (td >> 1) & 1
-    bit7 = 1 if td >= 9 else 0
-
-    if mode == "cool":
-        bit4 = b1
-        bit5 = b2
-        bit6 = b3 & (1 - b2)
-    elif mode == "heat":
-        bit4 = b1
-        bit5 = b2 & b3
-        bit6 = b3 ^ b2
-    elif mode == "dry":
-        bit4 = b1
-        bit5 = b2 & (1 - b1)
-        bit6 = b3
-    else:
-        return 0xE4
-
-    temp_nib = (bit7 << 3) | (bit6 << 2) | (bit5 << 1) | bit4
+    temp_nib = TEMP_NIB.get(temp, 0x0)
 
     mode_nibs = {"cool": 0x0, "fan_only": 0x4, "heat": 0xC, "dry": 0x4}
     mode_nib = mode_nibs.get(mode, 0x0)

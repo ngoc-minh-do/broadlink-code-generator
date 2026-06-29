@@ -349,16 +349,31 @@
           <tr><td>0–1</td><td>Header</td><td>Fixed device ID (<span class="hex-hdr" style="padding:1px 4px;">C2 3D</span>)</td></tr>
           <tr><td>2</td><td>Fan speed</td><td>Encodes fan level: auto→BF, quiet→FF, low→9F, medium→5F, high→3F, powerful→3F. Dry mode auto→1F</td></tr>
           <tr><td>3</td><td>Check</td><td>Complement of byte 2: <b>FF − B2</b> (error detection)</td></tr>
-          <tr><td>4</td><td>Mode + Temp</td><td>
-            <b>Upper nibble (bits 7–4)</b> = temperature (16–30°C). Encoding varies by mode:<br>
-            <span style="font-size:0.7rem;">
-            <b>cool</b>: [4]=b1, [5]=b2, [6]=b3&~b2, [7]=1 if t≥25<br>
-            <b>heat</b>: [4]=b1, [5]=b2&b3, [6]=b3⊕b2, [7]=1 if t≥25<br>
-            <b>dry</b>:  [4]=b1, [5]=b2&~b1, [6]=b3, [7]=1 if t≥25<br>
-            <b>fan_only</b>: always E4h (temperature not applicable)<br>
-            Some adjacent temps share the same code.<br>
-            <b>Lower nibble (bits 3–0)</b> = mode: 0=cool, 4=fan_only/dry, C=heat
+           <tr><td>4</td><td>Mode + Temp</td><td>
+            <b>Upper nibble (bits 7–4)</b> = temperature. Same encoding for cool/heat/dry:<br>
+            <span style="font-size:0.72rem;">
+            <table style="margin:4px 0;border-collapse:collapse;text-align:center;">
+              <tr style="background:var(--surface2);">
+                <td style="width:28px;padding:2px 4px;">°C</td>
+                <td style="width:24px">16</td><td style="width:24px">17</td><td style="width:24px">18</td><td style="width:24px">19</td><td style="width:24px">20</td><td style="width:24px">21</td><td style="width:24px">22</td><td style="width:24px">23</td><td style="width:24px">24</td><td style="width:24px">25</td><td style="width:24px">26</td><td style="width:24px">27</td><td style="width:24px">28</td><td style="width:24px">29</td><td style="width:24px">30</td>
+              </tr>
+              <tr>
+                <td>nib</td>
+                <td>0</td><td>0</td><td>1</td><td>3</td><td>2</td><td>6</td><td>7</td><td>5</td><td>4</td><td>C</td><td>D</td><td>9</td><td>8</td><td>A</td><td>B</td>
+              </tr>
+            </table>
             </span>
+            16/17°C share 0x0 (footer <span class="hex-hdr" style="padding:1px 3px;">B15=0x10</span> disambiguates 16°C).<br>
+            <b>fan_only</b>: always <span class="hex-hdr" style="padding:1px 3px;">E4h</span> (temperature not applicable).<br>
+             <b>Lower nibble (bits 3–0)</b> = mode:
+            <table style="margin:4px 0;border-collapse:collapse;text-align:center;">
+              <tr style="background:var(--surface2);">
+                <td style="padding:2px 6px;">cool</td><td style="padding:2px 6px;">dry</td><td style="padding:2px 6px;">fan_only</td><td style="padding:2px 6px;">heat</td>
+              </tr>
+              <tr>
+                <td>0</td><td>4</td><td>4</td><td>C</td>
+              </tr>
+            </table>
           </td></tr>
           <tr><td>5</td><td>Check</td><td>Complement of byte 4: <b>FF − B4</b> (error detection)</td></tr>
           <tr><td>6–11</td><td>Repeat</td><td>Copy of bytes 0–5 (for reliability)</td></tr>

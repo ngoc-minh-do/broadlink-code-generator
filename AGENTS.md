@@ -29,8 +29,8 @@
 - The AC remote uses an 18-byte (144-bit) protocol: 6-byte payload repeated twice + 6-byte footer. The OFF command is 12 bytes (payload ×2, no footer).
 - Byte 0-1: fixed identifier `C2 3D`. Byte pairs (2,3) and (4,5) are complementary: B3 = 0xFF − B2, B5 = 0xFF − B4.
 - Byte 2 encodes fan speed: auto→0xBF, quiet→0xFF, low→0x9F, medium→0x5F, high→0x3F, powerful→0x3F. Dry mode auto→0x1F.
-- Byte 4 encodes temperature+mode: upper nibble = temperature (see formula below), lower nibble = mode (0=cool, 4=fan_only/dry, C=heat). fan_only mode always uses B4=0xE4 (temp not applicable).
-- Temperature encoding (upper nibble of B4, t-16 as 4-bit b3b2b1b0): bit7=1 if t≥25, then mode-specific — cool: bit4=b1, bit5=b2, bit6=b3&~b2; heat: bit4=b1, bit5=b2&b3, bit6=b3⊕b2; dry: bit4=b1, bit5=b2&~b1, bit6=b3. Some adjacent temps share codes. fan_only always uses B4=0xE4.
+- Byte 4 encodes temperature+mode: upper nibble = temperature, lower nibble = mode (0=cool, 4=fan_only/dry, C=heat). fan_only mode always uses B4=0xE4 (temp not applicable).
+- Temperature encoding (upper nibble of B4) is mode-independent lookup table. 16/17°C share the same code; all other temps (18–30°C) have unique nibbles: 16→0x0, 17→0x0, 18→0x1, 19→0x3, 20→0x2, 21→0x6, 22→0x7, 23→0x5, 24→0x4, 25→0xC, 26→0xD, 27→0x9, 28→0x8, 29→0xA, 30→0xB.
 - Footer: B12=0xD5 fixed, B13 encodes fan speed % (quiet=1, low=40, medium=60, high=80, powerful=100, auto=102). B17 = sum(B12..B16) mod 256 (checksum).
 - To add captures, edit `captures/Toshiba_RAS-K281X.txt` with `<label>\n<base64>` pairs. Label format: `<temp> <mode> <fan>` (use `x` for temp when not applicable, e.g. `x fan_only auto`). Re-run `generate_smartir.py --generate --save` to update the JSON.
 
