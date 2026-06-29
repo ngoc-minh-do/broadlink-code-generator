@@ -33,22 +33,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return str(CAPTURES / rel)
         return p
 
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            sys.stderr.write(
+                f"[{self.address_string()}] client disconnected before"
+                f" response completed ({self.command} {self.path})\n"
+            )
+
+    def _log_disconnect(self, where=""):
+        sys.stderr.write(
+            f"[{self.address_string()}] client disconnected"
+            f" ({where}) {self.command} {self.path}\n"
+        )
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/analyze":
             self.handle_analyze(parsed)
             return
-        super().do_GET()
+        try:
+            super().do_GET()
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            self._log_disconnect("during GET response")
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == "/api/decode":
-            self.handle_decode()
-            return
-        if parsed.path == "/api/compare":
-            self.handle_compare()
-            return
-        self.send_json({"error": "Not found"}, 404)
+        try:
+            if parsed.path == "/api/decode":
+                self.handle_decode()
+                return
+            if parsed.path == "/api/compare":
+                self.handle_compare()
+                return
+            self.send_json({"error": "Not found"}, 404)
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            self._log_disconnect("during POST")
 
     def handle_decode(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -289,7 +310,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", len(body))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            self._log_disconnect("during send_json")
         if status >= 400:
             sys.stderr.write(f"[{self.path}] {status} {json.dumps(data)}\n")
 
@@ -299,7 +323,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    with socketserver.ThreadingTCPServer(("", PORT), Handler) as httpd:
         print(f"Serving at http://localhost:{PORT}")
         print(f"  App      : http://localhost:{PORT}/")
         print(f"  API      : http://localhost:{PORT}/api/analyze?file=captures/Toshiba-JP.txt")
