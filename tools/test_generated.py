@@ -33,7 +33,7 @@ from boardlink_local.protocol import (
 )
 from boardlink_local.decoder import classify_pulses, pulses_to_bits, bits_to_bytes
 
-JSON_PATH = Path("captures/generated_smartir.json")
+JSON_PATH = Path("captures/9999.json")
 
 
 def compare_signals(gen_b64, cap_b64):
