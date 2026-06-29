@@ -12,64 +12,28 @@ Usage:
   uv run python tools/test_generated.py --all --shuffle
 """
 
+from __future__ import annotations
+
 import base64
 import json
-import os
 import random
 import sys
-import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-load_dotenv()
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import broadlink
 from broadlink.remote import data_to_pulses
 
-from tools.generate_smartir import (
-    classify_pulses,
-    pulses_to_bits,
-    bits_to_bytes,
-    generate_code,
-    generate_off_code,
+from boardlink_local.device import find_device
+from boardlink_local.capture import capture, TIMEOUT
+from boardlink_local.protocol import (
     CLIMATE_MODES,
     FAN_SPEEDS,
     TEMP_RANGE,
+    generate_code,
+    generate_off_code,
 )
+from boardlink_local.decoder import classify_pulses, pulses_to_bits, bits_to_bytes
 
-DEVICE_IP = os.environ["BROADLINK_IP"]
-TIMEOUT = 30
 JSON_PATH = Path("captures/generated_smartir.json")
-
-
-def find_device():
-    print(f"Discovering Broadlink device at {DEVICE_IP}...")
-    dev = broadlink.discover(discover_ip_address=DEVICE_IP, timeout=5)
-    if not dev:
-        print("No device found.")
-        sys.exit(1)
-    dev = dev[0]
-    dev.auth()
-    return dev
-
-
-def capture(dev, timeout=TIMEOUT):
-    """Enter learning mode and capture one IR packet. Returns base64 string."""
-    dev.enter_learning()
-    print("  Press the button on the remote...", end="", flush=True)
-    for _ in range(timeout):
-        time.sleep(1)
-        try:
-            packet = dev.check_data()
-            if packet:
-                print(" captured!")
-                return base64.b64encode(packet).decode()
-        except Exception:
-            pass
-    print(" timeout!")
-    return None
 
 
 def compare_signals(gen_b64, cap_b64):
@@ -192,13 +156,11 @@ def main():
         print("No tests selected.")
         return
 
-    # Add off test if not skipped
     if not args.skip_off:
         tests.insert(0, ("off", 0, ""))
 
     print(f"\n{'='*60}")
     print(f"Testing {len(tests)} code(s) against physical remote")
-    print(f"Device IP: {DEVICE_IP}")
     print(f"{'='*60}\n")
 
     dev = find_device()

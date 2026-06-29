@@ -7,32 +7,15 @@ Usage:
   uv run python tools/send_code.py --mode cool --temp 25 --fan auto
 """
 
+from __future__ import annotations
+
 import base64
-import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-load_dotenv()
-
-import broadlink
-from broadlink.remote import data_to_pulses
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from tools.generate_smartir import generate_code, generate_off_code
-
-DEVICE_IP = os.environ["BROADLINK_IP"]
-
-
-def find_device():
-    dev = broadlink.discover(discover_ip_address=DEVICE_IP, timeout=5)
-    if not dev:
-        print("No Broadlink device found at", DEVICE_IP)
-        sys.exit(1)
-    dev = dev[0]
-    dev.auth()
-    return dev
+from boardlink_local.device import find_device
+from boardlink_local.protocol import generate_code, generate_off_code
+from boardlink_local.decoder import read_captures
 
 
 def send(dev, b64: str):
@@ -59,8 +42,6 @@ def main():
         b64 = generate_off_code()
         print("Sending: OFF")
     elif args.key:
-        from tools.generate_smartir import read_captures
-
         capture_path = (
             Path(__file__).resolve().parent.parent / "captures" / "Toshiba-JP.txt"
         )

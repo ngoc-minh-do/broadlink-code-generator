@@ -21,8 +21,6 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 CAPTURES = ROOT / "captures"
 
-sys.path.insert(0, str(ROOT))
-
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -67,7 +65,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         try:
-            from tools.generate_smartir import classify_pulses, pulses_to_bits, bits_to_bytes
+            from boardlink_local.decoder import classify_pulses, pulses_to_bits, bits_to_bytes
             from broadlink.remote import data_to_pulses
             import base64
         except ImportError as e:
@@ -99,7 +97,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "has_footer": len(b) >= 18,
                 "is_off": len(b) == 12,
             }
-            # Protocol checks
             if len(b) >= 6:
                 entry["complement_b2b3"] = b[2] + b[3] == 0xFF
                 entry["complement_b4b5"] = b[4] + b[5] == 0xFF
@@ -126,7 +123,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         try:
-            from tools.generate_smartir import classify_pulses, pulses_to_bits, bits_to_bytes
+            from boardlink_local.decoder import classify_pulses, pulses_to_bits, bits_to_bytes
             from broadlink.remote import data_to_pulses
             import base64
         except ImportError as e:
@@ -139,7 +136,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             ctx = classify_pulses(pulses)
             bits, _ = pulses_to_bits(pulses, ctx)
             b = bits_to_bytes(bits)
-            # Extract timing values from ctx
             timing = {
                 "hdr_mark": ctx.get("hdr_mark"),
                 "hdr_space": ctx.get("hdr_space"),
@@ -164,7 +160,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": f"Decode failed: {e}"}, 400)
             return
 
-        # Build per-pulse diff
         max_len = max(len(a["pulses"]), len(b["pulses"]))
         pulse_diff = []
         diff_count = 0
@@ -184,7 +179,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "delta": (pb - pa) if (pa is not None and pb is not None) else None,
             })
 
-        # Bit-level diff
         bit_diff = None
         if len(a["bits"]) == len(b["bits"]):
             bit_diffs = []
@@ -195,7 +189,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "len_a": len(a["bits"]),
                 "len_b": len(b["bits"]),
                 "diff_count": len(bit_diffs),
-                "diffs": bit_diffs[:50],  # limit for display
+                "diffs": bit_diffs[:50],
             }
 
         self.send_json({
@@ -228,15 +222,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         fullpath = ROOT / filepath
 
         try:
-            from tools.generate_smartir import (
-                read_captures,
-                analyze_signals,
-                generate_smartir,
-                find_missing,
-                classify_pulses,
-                pulses_to_bits,
-                bits_to_bytes,
-            )
+            from boardlink_local.decoder import read_captures, analyze_signals
+            from boardlink_local.smartir import build_smartir
         except ImportError as e:
             self.send_json({"error": f"Import failed: {e}"}, 500)
             return
@@ -248,7 +235,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         signals = read_captures(str(fullpath))
         decoded = analyze_signals(signals)
 
-        # Build byte-level summary
         entries = []
         for label, d in decoded.items():
             b = d["bytes"]
@@ -267,8 +253,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 ),
             })
 
-        sj = generate_smartir(decoded)
-        missing, suggestions = find_missing(decoded)
+        sj = build_smartir(decoded)
+
+        # Compute missing combinations
+        from boardlink_local.protocol import CLIMATE_MODES, FAN_SPEEDS, TEMP_RANGE
+        from boardlink_local.decoder import parse_label
+        all_modes = CLIMATE_MODES[1:]
+        have = set()
+        for label in decoded:
+            p = parse_label(label)
+            if p.get("mode") in all_modes and p.get("temp") is not None:
+                have.add((p["mode"], p["temp"], p["fan"]))
+        missing = []
+        suggestions = []
+        for mode in all_modes:
+            for temp in TEMP_RANGE:
+                for fan in FAN_SPEEDS:
+                    if (mode, temp, fan) not in have:
+                        missing.append(f"{temp} {mode} {fan}")
+                        if len(suggestions) < 20:
+                            suggestions.append(f"{temp} {mode} {fan}")
 
         self.send_json({
             "captures": len(decoded),

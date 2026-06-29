@@ -3,26 +3,39 @@
 ## Setup
 - Python >=3.13, managed with `uv`
 - Install deps: `uv sync`
-- The project depends only on `broadlink>=0.19.0`
+- The project depends on `broadlink>=0.19.0` and `python-dotenv>=1.2.2`
+- Set `BROADLINK_IP` in `.env` to your Broadlink device's IP address
 
 ## Commands
-- Run the main capture script: `uv run python main.py`
+- Capture a single IR code: `uv run python tools/capture.py`
 - Reverse-engineer IR protocol & generate SmartIR JSON: `uv run python tools/generate_smartir.py captures/Toshiba-JP.txt`
   - Decodes Broadlink base64 into byte-level protocol analysis, identifies the message structure (payload fields, complementary pairs, checksum), and exports a SmartIR-compatible JSON ready for Home Assistant.
   - Options: `--json` (print JSON), `--missing` (show gaps + suggested captures), `--generate` (produce inferred codes for all temp/mode/fan combos), `--save FILE.json` (write to file).
+- Send an IR code: `uv run python tools/send_code.py '<base64>'`
+  - Options: `--key '25 cool auto'`, `--mode cool --temp 25 --fan auto`, `--off`
 - Interactive test generated codes against physical remote: `uv run python tools/test_generated.py`
 - Guided capture of missing IR codes: `uv run python tools/capture_missing.py`
   - Reads existing captures, shows what's missing, interactively guides through each capture.
   - Options: `--mode heat cool` (filter modes), `--dry-run` (show missing only), `--fan-variants` (also capture fan variants for already-captured temps).
-  - Picks generated codes, prompts you to press the matching button on the remote, captures via Broadlink, compares byte-level match.
   - Options: `--all` (every combination), `--mode cool heat --temps 20 25 30` (specific), `--shuffle`, `--count 5`.
 - Start the IR Learner & SmartIR Builder web app: `uv run python web/server.py`
   - Opens at `http://localhost:8080`. The app helps visualize/analyze IR timings and build SmartIR JSON files.
+
 ## Architecture
-- `main.py` — discovers a Broadlink device on the local network at hardcoded IP `192.168.0.120`, enters IR learning mode, waits up to 30s for a button press, then prints the captured packet as hex and base64.
-- `tools/generate_smartir.py` — protocol reverse-engineering tool. Decodes Broadlink base64 to raw pulses via `broadlink.remote.data_to_pulses()`, classifies marks/spaces, converts to bits/bytes, compares patterns across captures to identify which bytes encode temperature/mode/fan, and produces SmartIR JSON.
-- `captures/` — saved IR captures. `Toshiba-JP.txt` is the primary capture file (label+base64 pairs). `*.txt` are raw IRremoteESP8266-format timing arrays.
-- `web/` — single-page HTML app for visualizing IR timings and building SmartIR JSON manually.
+- `src/boardlink_local/` — shared library package
+  - `device.py` — Broadlink device discovery & authentication
+  - `capture.py` — IR learning mode helpers
+  - `protocol.py` — protocol constants, field encoders, and code generators (TEMP_NIB, FAN_B2, generate_code, etc.)
+  - `decoder.py` — pulse→bit→byte decoding, capture file I/O, label parsing
+  - `smartir.py` — SmartIR JSON builder
+- `tools/` — CLI scripts
+  - `capture.py` — single IR code capture
+  - `generate_smartir.py` — protocol analysis & SmartIR JSON export
+  - `send_code.py` — send IR codes to Broadlink device
+  - `capture_missing.py` — guided interactive capture of missing codes
+  - `test_generated.py` — test generated codes against physical remote
+- `captures/` — saved IR captures. `Toshiba-JP.txt` is the primary capture file (label+base64 pairs).
+- `web/` — single-page HTML app + HTTP server for visualizing IR timings and building SmartIR JSON manually.
 - `uv.lock` is committed — treat this as the lockfile source of truth.
 
 ## Protocol notes (from captured AC remote)
@@ -35,5 +48,5 @@
 - To add captures, edit `captures/Toshiba-JP.txt` with `<label>\n<base64>` pairs. Label format: `<temp> <mode> <fan>` (use `x` for temp when not applicable, e.g. `x fan_only auto`). Re-run `generate_smartir.py --generate --save` to update the JSON.
 
 ## Gotchas
-- `main.py` has a hardcoded device IP. The Broadlink device must be reachable on the local network for the script to work.
-- `Toshiba-JP.txt` captures use Broadlink base64 format (output of `main.py`).
+- The Broadlink device must be reachable on the local network for any tool to work.
+- `Toshiba-JP.txt` captures use Broadlink base64 format (output of `capture.py`).

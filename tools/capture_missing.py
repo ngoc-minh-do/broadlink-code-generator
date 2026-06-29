@@ -18,26 +18,17 @@ from __future__ import annotations
 import base64
 import os
 import sys
-import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 load_dotenv()
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from boardlink_local.device import DEVICE_IP, find_device
+from boardlink_local.capture import capture, TIMEOUT
+from boardlink_local.protocol import CLIMATE_MODES, FAN_SPEEDS, TEMP_RANGE
+from boardlink_local.decoder import parse_label, read_captures
 
-import broadlink
-
-from tools.generate_smartir import parse_label
-
-DEVICE_IP = os.environ["BROADLINK_IP"]
-TIMEOUT = 30
 CAPTURE_PATH = Path("captures/Toshiba-JP.txt")
-
-CLIMATE_MODES = ["cool", "heat", "dry", "fan_only", "heat_cool"]
-FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]
-TEMP_RANGE = list(range(16, 31))
 
 
 def read_existing_labels(path: Path) -> set[tuple[str | None, int | None, str | None]]:
@@ -64,7 +55,6 @@ def compute_missing(
     stage2: list = []
 
     for mode in target_modes:
-        # dry/heat_cool: fan always auto (not independently controllable)
         if mode in ("dry", "heat_cool"):
             for temp in TEMP_RANGE:
                 key = (mode, temp, "auto")
@@ -91,35 +81,6 @@ def compute_missing(
                         stage2.append(fkey)
 
     return stage1 + stage2
-
-
-def find_device():
-    print(f"Discovering Broadlink at {DEVICE_IP}...", end=" ", flush=True)
-    dev = broadlink.discover(discover_ip_address=DEVICE_IP, timeout=5)
-    if not dev:
-        print("FAILED")
-        sys.exit(1)
-    dev = dev[0]
-    dev.auth()
-    print("connected.")
-    return dev
-
-
-def capture(dev, timeout=TIMEOUT) -> str | None:
-    dev.enter_learning()
-    print("  Press button on remote...", end="", flush=True)
-    for _ in range(timeout):
-        time.sleep(1)
-        try:
-            packet = dev.check_data()
-            if packet:
-                b64 = base64.b64encode(packet).decode()
-                print(f" captured! ({len(packet)} bytes)")
-                return b64
-        except Exception:
-            pass
-    print(" timeout!")
-    return None
 
 
 def format_label(mode: str, temp: int | None, fan: str) -> str:

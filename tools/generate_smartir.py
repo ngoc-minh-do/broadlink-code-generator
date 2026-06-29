@@ -22,308 +22,13 @@ Protocol (18 bytes = 144 bits):
 
 from __future__ import annotations
 
-import base64
 import json
-import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-from broadlink.remote import data_to_pulses, pulses_to_data
+from boardlink_local.protocol import CLIMATE_MODES, FAN_SPEEDS, TEMP_RANGE
+from boardlink_local.decoder import read_captures, analyze_signals, parse_label
+from boardlink_local.smartir import build_smartir
 
-# ── Pulse-level decoding ────────────────────────────────
-
-def reduce_list(items, margin=150):
-    result = []
-    for item in sorted(set(items), reverse=True):
-        if not result or item < result[-1] - margin:
-            result.append(item)
-    return result
-
-def within_margin(seen, expected, margin=150):
-    return abs(seen - expected) <= margin
-
-def classify_pulses(pulses, margin=150):
-    marks = pulses[::2]
-    spaces = pulses[1::2]
-    mark_c = reduce_list(marks, margin)
-    space_c = reduce_list(spaces, margin)
-    bit_mark = mark_c[-1] if mark_c else 0
-    hdr_mark = mark_c[0] if len(mark_c) > 1 else bit_mark
-    zero = one = hdr_space = None
-    gaps = []
-    for v in space_c:
-        if 300 <= v <= 900 and zero is None:
-            zero = v
-        elif 1300 <= v <= 2200 and one is None:
-            one = v
-        elif 3800 <= v <= 5200 and hdr_space is None:
-            hdr_space = v
-        elif v > 5200:
-            gaps.append(v)
-    return {
-        "bit_mark": bit_mark, "hdr_mark": hdr_mark,
-        "zero_space": zero, "one_space": one, "hdr_space": hdr_space,
-        "gaps": gaps, "margin": margin,
-    }
-
-def pulses_to_bits(pulses, ctx):
-    if not ctx or ctx.get("one_space") is None or ctx.get("zero_space") is None:
-        return "", []
-    bits = ""
-    for i in range(1, len(pulses), 2):
-        v = pulses[i]
-        if within_margin(v, ctx["one_space"], ctx["margin"]):
-            bits += "1"
-        elif within_margin(v, ctx["zero_space"], ctx["margin"]):
-            bits += "0"
-    return bits, []
-
-def bits_to_bytes(bits):
-    n = len(bits) // 8
-    return [int(bits[i : i + 8], 2) for i in range(0, n * 8, 8)]
-
-# ── Capture file I/O ────────────────────────────────────
-
-def read_captures(path) -> Dict[str, dict]:
-    lines = Path(path).read_text().strip().splitlines()
-    lines = [l.strip() for l in lines if l.strip()]
-    sigs = {}
-    for i in range(0, len(lines), 2):
-        label = lines[i]
-        b64 = lines[i + 1]
-        raw = base64.b64decode(b64)
-        pulses = data_to_pulses(raw)
-        sigs[label] = {"b64": b64, "raw": raw, "pulses": pulses}
-    return sigs
-
-def analyze_signals(signals) -> Dict[str, dict]:
-    decoded = {}
-    for label, d in signals.items():
-        ctx = classify_pulses(d["pulses"])
-        bits, _ = pulses_to_bits(d["pulses"], ctx)
-        b = bits_to_bytes(bits)
-        decoded[label] = {
-            "b64": d["b64"], "raw": d["raw"],
-            "pulses": d["pulses"], "bits": bits, "bytes": b, "ctx": ctx,
-        }
-    return decoded
-
-def parse_label(label: str) -> dict:
-    label = label.strip()
-    if label.lower() == "off":
-        return {"mode": "off", "temp": None, "fan": None}
-    parts = label.split()
-    if len(parts) == 3:
-        try:
-            temp = int(parts[0]) if parts[0].lower() != "x" else None
-            mode = parts[1]
-            return {"mode": mode, "temp": temp, "fan": parts[2]}
-        except ValueError:
-            pass
-    return {"mode": label, "temp": None, "fan": None}
-
-# ── Protocol field encoders ─────────────────────────────
-
-# Temperature → B4 upper nibble lookup (verified from all 15 heat captures).
-# Same encoding across all modes (cool, heat, dry) — only mode nibble differs.
-# 16 and 17°C share the B4 nibble; footer B15=0x10 disambiguates 16°C.
-
-TEMP_NIB = {
-    16: 0x0, 17: 0x0,
-    18: 0x1, 19: 0x3,
-    20: 0x2, 21: 0x6,
-    22: 0x7, 23: 0x5,
-    24: 0x4, 25: 0xC,
-    26: 0xD, 27: 0x9,
-    28: 0x8, 29: 0xA,
-    30: 0xB,
-}
-
-
-def encode_temp_b4(temp: int, mode: str) -> int:
-    """Return the B4 byte value (upper nibble = temperature, lower = mode)."""
-    if mode == "fan_only":
-        return 0xE4
-
-    temp_nib = TEMP_NIB.get(temp, 0x0)
-
-    mode_nibs = {"cool": 0x0, "fan_only": 0x4, "heat": 0xC, "dry": 0x4, "heat_cool": 0x8}
-    mode_nib = mode_nibs.get(mode, 0x0)
-
-    return (temp_nib << 4) | mode_nib
-
-
-# Fan speed encoding for B2 (verified with all 5 speeds + auto).
-#   auto = 0xBF, quiet=0xFF, low=0x9F, medium=0x5F, high=0x3F, powerful=0x3F
-#   dry/heat_cool always auto fan: B2 = 0x1F (not 0xBF)
-
-FAN_B2 = {"auto": 0xBF, "quiet": 0xFF, "low": 0x9F, "medium": 0x5F, "high": 0x3F, "powerful": 0x3F}
-
-def encode_fan_b2(fan: str, mode: str) -> int:
-    if mode in ("dry", "heat_cool"):
-        return 0x1F
-    return FAN_B2.get(fan, 0xBF)
-
-
-# Footer B13: fan speed percentage (verified).
-#   quiet→1, low→40, medium→60, high→80, powerful→100, auto→102 (dry auto→101)
-FAN_B13 = {"auto": 102, "quiet": 1, "low": 40, "medium": 60, "high": 80, "powerful": 100}
-
-def encode_footer_b13(fan: str, mode: str) -> int:
-    if mode in ("dry", "heat_cool"):
-        return 101
-    return FAN_B13.get(fan, 102)
-
-
-# ── Code generator ──────────────────────────────────────
-
-# IR timing constants — chosen so int(pulse / 32.84) hits the correct
-# raw-byte tick values from captured signals (0x8c,0x8d,0x12,0x34).
-# The real remote has natural ±1-tick jitter; these values produce the
-# "center" encoding that the AC device accepts.
-_HDR_MARK = 4598      # → raw byte 0x8c  (140 ticks)
-_HDR_SPACE = 4631     # → raw byte 0x8d  (141 ticks)
-_BIT_MARK = 592       # → raw byte 0x12  (18 ticks)
-_ZERO_SPACE = 592     # → raw byte 0x12  (18 ticks)
-_ONE_SPACE = 1708     # → raw byte 0x34  (52 ticks)
-_SEG_GAP = 5485       # inter-segment gap (~5.5ms, from captures)
-_GAP = 109455         # final inter-message gap
-
-
-def _segment_to_pulses(bits_48: str, gap: int) -> list:
-    """Build pulse sequence for one 6-byte (48-bit) segment."""
-    pulses = [_HDR_MARK, _HDR_SPACE]
-    for bit in bits_48:
-        pulses.append(_BIT_MARK)
-        pulses.append(_ONE_SPACE if bit == "1" else _ZERO_SPACE)
-    pulses.append(_BIT_MARK)  # trailing mark
-    pulses.append(gap)        # inter-segment or final gap
-    return pulses
-
-
-def _bytes_to_ir_packet(msg_bytes: bytes) -> bytes:
-    """Convert logical protocol bytes to a Broadlink IR packet (base64-ready).
-
-    The remote sends the 18-byte message as three 6-byte segments, each
-    prefixed with a header and separated by a 5.5ms gap. This produces
-    300 pulses (3 × 100).
-    Handles variable-length messages: OFF (12 bytes) → 2 segments (200 pulses), normal (18 bytes) → 3 segments (300).
-    """
-    bits = "".join(f"{b:08b}" for b in msg_bytes)
-    total_bits = len(bits)
-
-    pulses = []
-    for offset in range(0, total_bits, 48):
-        segment_bits = bits[offset : offset + 48]
-        gap = _GAP if offset + 48 >= total_bits else _SEG_GAP
-        pulses += _segment_to_pulses(segment_bits, gap)
-
-    return pulses_to_data(pulses)
-
-
-def generate_code(mode: str, temp: int, fan: str) -> str:
-    """Generate a Broadlink base64 IR code for the given parameters.
-
-    Builds the 18-byte protocol message and encodes it to a
-    Broadlink IR packet ready for base64 transmission.
-    """
-    b2 = encode_fan_b2(fan, mode)
-    b3 = 0xFF - b2
-    b4 = encode_temp_b4(temp, mode)
-    b5 = 0xFF - b4
-
-    payload = bytes([0xC2, 0x3D, b2, b3, b4, b5])
-
-    b13 = encode_footer_b13(fan, mode)
-    b14 = b16 = 0x00
-    b15 = 0x00
-    if temp == 16:
-        b15 = 0x10  # disambiguation for minimum temperature
-    if fan == "powerful":
-        b15 = 0x02  # fan speed powerful footer marker (all modes)
-    ck = sum([0xD5, b13, b14, b15, b16]) % 256
-    footer = bytes([0xD5, b13, b14, b15, b16, ck])
-
-    msg_bytes = payload + payload + footer  # 18 bytes
-    ir_packet = _bytes_to_ir_packet(msg_bytes)
-    return base64.b64encode(ir_packet).decode()
-
-
-def generate_off_code() -> str:
-    """Generate the OFF code."""
-    payload = bytes([0xC2, 0x3D, 0x7B, 0x84, 0xE0, 0x1F])
-    msg_bytes = payload + payload  # 12 bytes, no footer
-    ir_packet = _bytes_to_ir_packet(msg_bytes)
-    return base64.b64encode(ir_packet).decode()
-
-
-# ── Climate lookup tables (SmartIR convention) ──────────
-
-CLIMATE_MODES = ["off", "cool", "heat", "fan_only", "dry", "heat_cool"]
-FAN_SPEEDS = ["auto", "quiet", "low", "medium", "high", "powerful"]
-TEMP_RANGE = list(range(16, 31))
-
-
-# ── SmartIR JSON builder ────────────────────────────────
-
-def build_smartir(decoded, generate_all=False) -> dict:
-    """Build SmartIR-compatible JSON.
-
-    If generate_all=True, generates codes for all temp/mode/fan combinations
-    using the derived protocol formulas. Known captures take priority.
-    """
-    commands: dict = {"off": None}
-
-    # Off code
-    for label, d in decoded.items():
-        if parse_label(label).get("mode") == "off":
-            commands["off"] = d["b64"]
-            break
-    if commands["off"] is None:
-        commands["off"] = generate_off_code()
-
-    # Collect verified codes from captures
-    verified = set()
-    for label, d in decoded.items():
-        p = parse_label(label)
-        if p["mode"] in CLIMATE_MODES[1:] and p["temp"] is not None:
-            verified.add((p["mode"], p["temp"], p["fan"]))
-
-    for mode in CLIMATE_MODES[1:]:  # skip "off"
-        commands[mode] = {}
-        fans = FAN_SPEEDS
-        for fan in fans:
-            commands[mode][fan] = {}
-            for temp in TEMP_RANGE:
-                temp_key = str(temp)
-                key = (mode, temp, fan)
-                if key in verified:
-                    # Use the actual captured code
-                    for label, d in decoded.items():
-                        p = parse_label(label)
-                        if (p.get("mode"), p.get("temp"), p.get("fan")) == key:
-                            commands[mode][fan][temp_key] = d["b64"]
-                            break
-                elif generate_all:
-                    # Generate from formulas
-                    code = generate_code(mode, temp, fan)
-                    commands[mode][fan][temp_key] = code
-
-    return {
-        "manufacturer": "Toshiba JP",
-        "supportedModels": ["RAS‒G221M", "RAS-K281X"],
-        "supportedController": "Broadlink",
-        "commandsEncoding": "Base64",
-        "minTemperature": 16.0,
-        "maxTemperature": 30.0,
-        "precision": 1.0,
-        "operationModes": ["heat", "cool", "dry", "fan_only", "heat_cool"],
-        "fanModes": ["auto", "quiet", "low", "medium", "high", "powerful"],
-        "commands": commands,
-    }
-
-
-# ── Display helpers ────────────────────────────────────
 
 def print_protocol_analysis(decoded):
     print("\n═══ Protocol Byte Breakdown ═══")
@@ -333,7 +38,6 @@ def print_protocol_analysis(decoded):
         b = d["bytes"]
         hex_str = " ".join(f"{x:02X}" for x in b)
         parts = []
-        # Check structure
         if len(b) >= 6:
             if b[2] + b[3] == 0xFF:
                 parts.append("B2+B3=FF")
@@ -346,6 +50,7 @@ def print_protocol_analysis(decoded):
         flags = "  " + ", ".join(parts) if parts else ""
         print(f"{label:<16s} {len(b)*8:>4d}  {hex_str}{flags}")
     print()
+
 
 def print_field_mapping(decoded):
     print("═══ Field Mapping ═══")
@@ -361,7 +66,6 @@ def print_field_mapping(decoded):
               f"{str(p.get('temp') or ''):>4s}  {p.get('mode') or '':>4s}  {p.get('fan') or '':>4s}")
     print()
 
-# ── Main ────────────────────────────────────────────────
 
 def main():
     import argparse
